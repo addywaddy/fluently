@@ -1,4 +1,5 @@
 import {capture, resolve, context, pageURL} from './anchor.mjs'
+import {placement} from './placement.mjs'
 
 const script = document.currentScript
 const project = script?.dataset.project
@@ -19,7 +20,7 @@ if (project && !document.querySelector('fluently-feedback')) {
     if (!document.body) await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once: true}))
     const host = document.createElement('fluently-feedback')
     host.dataset.feedbackExclude = ''
-    host.style.cssText = 'all:initial!important;position:fixed!important;inset:0!important;pointer-events:none!important;z-index:2147483646!important;display:block!important;'
+    host.style.cssText = 'all:initial!important;position:absolute!important;inset:0!important;pointer-events:none!important;z-index:2147483646!important;display:block!important;'
     const shadow = host.attachShadow({mode: 'open'})
     const style = document.createElement('style')
     if (script.dataset.styleNonce) style.nonce = script.dataset.styleNonce
@@ -111,17 +112,23 @@ if (project && !document.querySelector('fluently-feedback')) {
     function position() {
       let hidden = 0
       const matching = threads.filter(t => t.status === filter)
-      for (const [i, thread] of matching.entries()) {
+      const origin = host.getBoundingClientRect()
+      // Complete layout reads before writing styles, avoiding a layout flush
+      // between every pin on pages with many threads.
+      const positions = matching.map(thread => {
+        const result = resolve(thread.anchor)
+        return result.state === 'resolved' ? placement(result.element, thread.anchor.point, origin) : null
+      })
+      for (const [i, location] of positions.entries()) {
         const pin = pins.children[i]
         if (!pin) continue
-        const result = resolve(thread.anchor)
-        pin.hidden = result.state !== 'resolved'
+        pin.hidden = !location
         if (pin.hidden) { hidden++; continue }
-        const r = result.element.getBoundingClientRect()
-        const x = r.left + r.width * thread.anchor.point.x, y = r.top + r.height * thread.anchor.point.y
-        pin.hidden = x < 0 || x > innerWidth || y < 0 || y > innerHeight
-        if (pin.hidden) hidden++
-        pin.style.left = `${x}px`; pin.style.top = `${y}px`
+        // Offscreen document pins remain rendered so they return with native
+        // scrolling, without waiting for a scroll handler to unhide them.
+        if (location.outside) hidden++
+        pin.style.position = location.position
+        pin.style.left = `${location.left}px`; pin.style.top = `${location.top}px`
       }
       const label = `${matching.length} ${filter} · ${hidden} hidden in this view`
       if (countLabel !== label) { listButton.textContent = label; countLabel = label }
