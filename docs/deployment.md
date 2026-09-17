@@ -24,7 +24,7 @@ export PHX_HOST=feedback.your-domain.com
 export FLUENTLY_IMAGE=your-registry-user/fluently
 export KAMAL_REGISTRY_USERNAME=your-registry-user
 export LITESTREAM_BUCKET=your-dedicated-fluently-backup-bucket
-export MAIL_FROM=hello@your-verified-sending-domain.com
+export MAIL_FROM=hello@fluently.now # optional: this is the Kamal default
 # Optional: KAMAL_REGISTRY_SERVER, FLUENTLY_ARCH, FLUENTLY_SSH_USER (default root)
 cp .kamal/secrets.example .kamal/secrets
 ```
@@ -94,8 +94,9 @@ console and confirm its event in Sentry. Avoid using real customer requests as t
 
 Verify a sending domain in Resend using the DNS records it provides. Create a sending API
 key restricted to that domain where possible, then provide `RESEND_API_KEY` through your
-shell/password manager or ignored `.kamal/secrets`. Export `MAIL_FROM` as a bare email
-address on the verified domain, for example `hello@mail.your-domain.com`. Kamal passes
+shell/password manager or ignored `.kamal/secrets`. Kamal defaults `MAIL_FROM` to
+`hello@fluently.now`; verify `fluently.now` in Resend. Set `MAIL_FROM` to override it
+with another bare email address on a verified domain. Kamal passes
 the API key as a secret and the sender as a clear runtime setting.
 
 Production requires both variables at startup and uses `Swoosh.Adapters.Resend` through
