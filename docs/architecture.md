@@ -8,6 +8,7 @@
 - Anchor envelope: version, platform, type, target identity, relative point, and viewport context. Prefer explicit feedback IDs; uncertain or hidden targets remain in the thread list rather than receiving speculative pins.
 - No screenshots in V1. No DOM dumps, input values, cookies, query strings or URL fragments. Exclusion applies to ancestors and target descendants; bounded selected-target text is captured only when stable IDs are absent, and can be disabled. URL paths and user-written comments may still contain personal data. Customers must mark sensitive regions and reviewers should avoid entering secrets.
 - Shadow DOM isolates widget styling, not security: trusted host-page scripts can access the review session. Use only on websites the project owner trusts. No cross-origin iframe or closed shadow-root targeting in V1.
+- Display pins at a fixed top-left inset rather than the recorded click percentage. The original point remains structured context; the visible badge identifies the whole element and does not claim to track a word through reflow. Comments resolving to the same visible DOM element share a badge.
 - Poll for changes and navigation at modest intervals; use layout observers for pins. Avoid patching host routing/history APIs.
 - Single app instance with bounded in-memory rate limiting for the pilot. Multiple replicas need a shared limiter before scale-out.
 - Deferred: screenshots/redaction pipeline, MCP, billing, automatic code changes, analytics, teams/SSO, configurable retention, native SDKs. Project deletion is available now.

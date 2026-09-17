@@ -174,8 +174,9 @@ if (project && !document.querySelector('fluently-feedback')) {
       // between every pin on pages with many threads.
       const positions = matching.map(thread => {
         const result = resolve(thread.anchor)
-        return result.state === 'resolved' ? placement(result.element, thread.anchor.point, origin) : null
+        return result.state === 'resolved' ? {...placement(result.element, origin), element: result.element} : null
       })
+      const groups = new Map()
       for (const [i, location] of positions.entries()) {
         const pin = pins.children[i]
         if (!pin) continue
@@ -184,18 +185,43 @@ if (project && !document.querySelector('fluently-feedback')) {
         // Offscreen document pins remain rendered so they return with native
         // scrolling, without waiting for a scroll handler to unhide them.
         if (location.outside) hidden++
+        const group = groups.get(location.element)
+        if (group) {
+          group.threads.push(matching[i]); pin.hidden = true
+          continue
+        }
+        groups.set(location.element, {pin, threads: [matching[i]], index: i})
         pin.style.position = location.position
         pin.style.left = `${location.left}px`; pin.style.top = `${location.top}px`
+      }
+      for (const {pin, threads: grouped, index} of groups.values()) {
+        pin.feedbackThreads = grouped
+        pin.textContent = grouped.length > 1 ? `${grouped.length}+` : String(index + 1)
+        pin.setAttribute('aria-label', grouped.length > 1 ? `Open ${grouped.length} comments on this element` : `Open comment ${index + 1}: ${grouped[0].messages[0]?.body.slice(0, 60) || ''}`)
       }
       const label = `${matching.length} ${filter} · ${hidden} hidden in this view`
       if (countLabel !== label) { listButton.textContent = label; countLabel = label }
     }
     function schedule() { if (!frame && !destroyed) frame = requestAnimationFrame(() => {frame = null; position()}) }
     function renderPins() {
+      outline.hidden = true
       pins.replaceChildren()
       threads.filter(t => t.status === filter).forEach((thread, i) => {
-        const pin = button(String(i + 1), () => showThread(thread), 'pin')
+        const pin = button(String(i + 1), () => {
+          const grouped = pin.feedbackThreads || [thread]
+          if (grouped.length === 1) { showThread(grouped[0]); return }
+          setArmed(false); openPanel('Comments on this element', 'group')
+          for (const item of grouped) panel.append(button(item.messages[0]?.body || 'Comment', () => showThread(item), 'thread'))
+        }, 'pin')
         pin.setAttribute('aria-label', `Open comment ${i + 1}: ${thread.messages[0]?.body.slice(0, 60) || ''}`)
+        const highlight = () => {
+          const result = resolve(thread.anchor)
+          if (result.state === 'resolved') outlineElement(result.element)
+        }
+        pin.addEventListener('pointerenter', highlight)
+        pin.addEventListener('focus', highlight)
+        pin.addEventListener('pointerleave', () => { outline.hidden = true })
+        pin.addEventListener('blur', () => { outline.hidden = true })
         pins.append(pin)
       })
       position()
@@ -357,7 +383,10 @@ if (project && !document.querySelector('fluently-feedback')) {
     function blockHost(event) { if (armed && !event.composedPath().includes(host)) { event.stopImmediatePropagation(); event.preventDefault() } }
     function hover(event) {
       if (!armed || event.composedPath().includes(host)) return
-      const rect = event.target.getBoundingClientRect()
+      outlineElement(event.target)
+    }
+    function outlineElement(element) {
+      const rect = element.getBoundingClientRect()
       outline.hidden = false; outline.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px`
     }
     function keydown(event) {

@@ -1,7 +1,7 @@
 # Fluently
 
 Figma-style conversations on real websites, with structured context for people and agents.
-Phoenix/PostgreSQL monolith, plain CSS management UI, and a standalone ~20 KB JavaScript embed.
+Phoenix/PostgreSQL monolith, plain CSS management UI, and a standalone ~22 KB JavaScript embed.
 The landing design uses plain HTML/CSS; the optional demo uses the embed SDK. The original `designs/` files are unchanged.
 
 ## Local development
@@ -90,6 +90,8 @@ Use stable semantic IDs for the best results:
 <button data-feedback-id="checkout-continue">Continue</button>
 <section data-feedback-exclude>Private information</section>
 ```
+
+Pins mark the target’s top-left corner with a fixed 8px inset (clamped inside tiny elements), so resizing or text wrapping does not shift them across its contents. Hovering or focusing a pin highlights its target. Multiple comments on the same visible element share a badge that opens a thread chooser. Existing comments use this placement too; their original relative click points remain in API context.
 
 Desktop and mobile equivalents may share a feedback ID. Exactly one visible match is required.
 Hidden, missing, ambiguous, excluded, and offscreen targets have no visible pin; their threads remain in the list. A DOM selector is stored as a fallback, never absolute page coordinates. Avoid recycled DOM IDs for different records.
