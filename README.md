@@ -1,7 +1,7 @@
 # Fluently
 
 Figma-style conversations on real websites, with structured context for people and agents.
-Phoenix/PostgreSQL monolith, plain CSS management UI, and a standalone ~15 KB JavaScript embed.
+Phoenix/PostgreSQL monolith, plain CSS management UI, and a standalone ~18 KB JavaScript embed.
 The landing design uses plain HTML/CSS; the optional demo uses the embed SDK. The original `designs/` files are unchanged.
 
 ## Local development
@@ -34,7 +34,9 @@ Run `mix assets.build` after editing `assets/embed/`; the normal development wat
 
 3. Save the **review link** and **read-only API key** shown once after creation. They are distinct from the public project UUID.
 4. Send reviewers the review link. Its fragment contains an unguessable invitation, removed by the SDK before it makes API requests. It expires after 14 days. Change the path before the fragment to review a particular page.
-5. Reviewers choose a display name, click **Add comment**, select an element, and post. Click a numbered pin to reply or resolve. The thread list includes hidden targets and a resolved filter.
+5. Reviewers choose a display name and switch the floating **Commenting: off** button on. Right-click an element and choose **Add comment**, or click **Add comment** in the toolbar and then select an element. Click a numbered pin to reply or resolve. The thread list includes hidden targets and a resolved filter.
+
+Commenting starts off. Turning it off hides pins and tools and restores ordinary page interactions. While on, ordinary left-clicks still navigate unless toolbar element selection is active. Escape dismisses the context menu or cancels selection/a draft; when no such UI is open it turns commenting off. Clicking outside, scrolling or resizing dismisses the menu. Shift + right-click keeps the native browser menu; editable and excluded areas are never given a Fluently menu.
 
 Guests share project-wide review access; there are no individual guest roles in V1. Signed review sessions last 24 hours and persist in sessionStorage for that tab. **Exit** clears the local session. Rotating project keys revokes all existing invitations/sessions and the old API key. Owner sessions last 12 hours.
 
@@ -45,7 +47,7 @@ On customer websites, no invitation/session means no widget or feedback requests
 Create a project for the Fluently service origin itself (locally `http://localhost:4000`).
 Set `FLUENTLY_PROJECT_ID` to that public project UUID and restart the service. Only the
 landing route includes the embed; login and project-management screens do not.
-Ordinary visitors see **Try it · add a comment** without an invitation or name prompt.
+Ordinary visitors can enable the floating **Commenting** button without an invitation or name prompt.
 Their first successful comment creates an anonymous account and a private demo project.
 A signed HttpOnly, SameSite cookie remembers their session across reloads. Each visitor
 sees only their own demo; these comments are not sent to the shared dogfood project.

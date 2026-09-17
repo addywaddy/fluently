@@ -26,6 +26,7 @@ if (project && !document.querySelector('fluently-feedback')) {
     const style = document.createElement('style')
     if (script.dataset.styleNonce) style.nonce = script.dataset.styleNonce
     style.textContent = `
+      .menu{position:fixed;z-index:1;min-width:170px;max-width:calc(100vw - 16px);padding:5px;background:white;border:1px solid #ccd6e4;border-radius:9px;box-shadow:0 8px 28px #14243a30;pointer-events:auto;font:13px/1.5 system-ui,sans-serif}.menu button{display:block;width:100%;text-align:left;white-space:nowrap}.controls{display:contents}
       :host{all:initial;color-scheme:light}*{box-sizing:border-box}button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #1689d5;outline-offset:3px}
       .bar,.panel,.hint,.pin{font:13px/1.5 system-ui,sans-serif;color:#273140;pointer-events:auto}.bar{position:fixed;bottom:16px;left:16px;display:flex;align-items:center;gap:8px;padding:8px;background:white;border:1px solid #ccd6e4;border-radius:10px;box-shadow:0 5px 22px #14243a25;max-width:calc(100vw - 32px);flex-wrap:wrap}
       button{background:#f4f8fc;border:1px solid #ccd6e4;border-radius:6px;padding:8px 12px;color:#1c597c}.primary{background:#167dbd;color:white;border-color:#167dbd}.panel{position:fixed;right:16px;top:16px;bottom:90px;width:350px;max-width:calc(100vw - 32px);overflow:auto;padding:20px;background:white;border:1px solid #ccd6e4;border-radius:12px;box-shadow:0 10px 40px #14243a30}.panel h2{font-size:19px;margin:0 0 15px}.panel p{margin:10px 0;overflow-wrap:anywhere}.panel label{display:block;margin:12px 0}.panel input,.panel textarea,.panel select{display:block;width:100%;padding:10px;border:1px solid #bccbdb;border-radius:6px;margin-top:6px;background:white;color:#273140}.panel textarea{min-height:100px;resize:vertical}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row h2{flex:1;margin:0}.muted{font-size:11px;color:#657387}.error{color:#a3313e;font-size:12px}.thread{display:block;width:100%;text-align:left;margin-top:10px;overflow-wrap:anywhere}.message{padding:12px 0;border-bottom:1px solid #e5ebf1;white-space:pre-wrap;overflow-wrap:anywhere}.message strong{font-size:12px}.message time{display:block;font-size:10px;color:#657387}.pin{position:fixed;transform:translate(-50%,-50%);border:2px solid white;box-shadow:0 0 0 1px #167dbd;width:28px;height:28px;padding:0;background:#167dbd;color:white;border-radius:50% 50% 3px 50%;font-size:11px}.hint{position:fixed;top:16px;left:16px;padding:10px 14px;background:#243447;color:white;border-radius:8px;max-width:calc(100vw - 32px);pointer-events:none}.outline{position:fixed;border:2px solid #1689d5;background:#1689d510;pointer-events:none}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}[hidden]{display:none!important}
@@ -42,29 +43,55 @@ if (project && !document.querySelector('fluently-feedback')) {
     }
     const bar = el('div', '', 'bar')
     const panel = el('section', '', 'panel'); panel.hidden = true; panel.setAttribute('aria-label', 'Fluently feedback')
-    const pins = el('div')
+    const pins = el('div'); pins.hidden = true
+    const menu = el('div', '', 'menu'); menu.hidden = true
+    menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', 'Fluently actions')
     const hint = el('div', 'Click or right-click an element · Esc to cancel', 'hint'); hint.hidden = true
     const outline = el('div', '', 'outline'); outline.hidden = true
     const live = el('div', '', 'sr'); live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite')
-    shadow.append(pins, outline, hint, bar, panel, live)
+    shadow.append(pins, outline, hint, bar, panel, live, menu)
     document.body.append(host)
     let armed = false, threads = [], page = pageURL(), draft = null, selected = null, filter = 'open', frame = null, loading = false
     let panelMode = '', lastFocus = null, busy = false, countLabel = '', destroyed = false
+    let commenting = false, menuSnapshot = null, menuFocus = null
     const announce = text => { live.textContent = text }
     const errorBox = () => { const node = el('p', '', 'error'); node.setAttribute('role', 'alert'); return node }
-    const toggle = button(demo ? 'Try it · add a comment' : 'Add comment', () => setArmed(!armed), 'primary')
+    const toggle = button('Commenting: off', () => setCommenting(!commenting), 'primary')
+    toggle.setAttribute('aria-pressed', 'false')
+    const addButton = button('Add comment', () => setArmed(!armed))
+    const controls = el('div', '', 'controls'); controls.hidden = true
     const listButton = button('Threads', () => showList())
     const exit = button('Exit', () => { try { sessionStorage.removeItem(storageKey) } catch {} ; token = null; cleanup() })
-    bar.append(el('strong', 'Fluently'), toggle, listButton, exit)
+    controls.append(addButton, listButton, exit)
+    bar.append(el('strong', 'Fluently'), toggle, controls)
     const saveDemo = el('a', 'Save my demo')
     if (demo) {
       saveDemo.href = '/signup'; saveDemo.style.cssText = 'color:#1c597c;padding:8px'
-      bar.append(saveDemo)
+      controls.append(saveDemo)
     }
-    const setArmed = value => {
-      armed = value; hint.hidden = !value; outline.hidden = true
-      hint.textContent = 'Click or right-click an element · Esc to cancel';
-      toggle.textContent = value ? 'Cancel' : demo && !threads.length ? 'Try it · add a comment' : 'Add comment'; toggle.setAttribute('aria-pressed', String(value))
+    const menuAdd = button('Add comment', () => {
+      const snapshot = menuSnapshot
+      closeContext()
+      if (snapshot && snapshot.page === pageURL()) { beginDraft(snapshot); lastFocus = addButton }
+    })
+    menuAdd.setAttribute('role', 'menuitem'); menu.append(menuAdd)
+    menu.addEventListener('keydown', event => {
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); menuAdd.focus() }
+      if (event.key === 'Tab') closeContext(true)
+    })
+    function setCommenting(value) {
+      commenting = value; controls.hidden = !value; pins.hidden = !value
+      toggle.textContent = value ? 'Commenting: on' : 'Commenting: off'
+      toggle.setAttribute('aria-pressed', String(value))
+      setArmed(false)
+      if (!value) closePanel()
+      announce(value ? 'Commenting enabled. Right-click an element or use Add comment.' : 'Commenting disabled.')
+    }
+    function setArmed(value) {
+      closeContext()
+      armed = commenting && value; hint.hidden = !commenting; outline.hidden = true
+      hint.textContent = armed ? 'Click an element · Esc to cancel' : 'Right-click an element to comment, or use Add comment · Esc to exit'
+      addButton.textContent = armed ? 'Cancel selection' : 'Add comment'; addButton.setAttribute('aria-pressed', String(armed))
       if (value) { closePanel(); announce('Choose an element. Press Escape to cancel.') }
     }
     function openPanel(title, mode) {
@@ -169,7 +196,7 @@ if (project && !document.querySelector('fluently-feedback')) {
         if (panelMode === 'list') showList(false)
         if (report) announce('Feedback loaded.')
       } catch (e) {
-        if (e.status === 401 || e.status === 403 || e.status === 404) { token = null; threads = []; renderPins(); setArmed(false); toggle.disabled = true; try { sessionStorage.removeItem(storageKey) } catch {} ; report = true }
+        if (e.status === 401 || e.status === 403 || e.status === 404) { token = null; threads = []; renderPins(); setCommenting(false); toggle.disabled = true; try { sessionStorage.removeItem(storageKey) } catch {} ; report = true }
         if (report) { openPanel('Feedback unavailable', 'error'); panel.append(el('p', e.message, 'error'), el('p', 'If the session expired or was revoked, reopen a current review link.')); }
       } finally { loading = false }
     }
@@ -232,31 +259,68 @@ if (project && !document.querySelector('fluently-feedback')) {
       try {
         const anchor = capture(event.target, event.clientX, event.clientY, {captureText: script.dataset.captureText !== 'false'})
         const snapshot = {anchor, context: context(), page: pageURL()}
-        setArmed(false); openPanel('New comment', 'draft'); draft = snapshot
-        panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
-        if (demo) panel.append(el('p', 'Only you can see your demo comments. We remember you with a cookie. Sign up to keep them; unsaved demos expire after 14 days.', 'muted'))
-        if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
-        messageForm('What should change?', async body => {
-          if (!draft || draft.page !== pageURL()) throw new Error('The page changed. Select the element again.')
-          const result = await api('/comments', 'POST', {...draft, body})
-          threads.push(result.data); filter = 'open'; renderPins(); showThread(result.data); announce('Comment posted.')
-        })
+        beginDraft(snapshot)
       } catch (e) { announce(e.message); hint.textContent = e.message + ' · Esc to cancel' }
     }
+    function beginDraft(snapshot) {
+      const {anchor} = snapshot
+      setArmed(false); openPanel('New comment', 'draft'); draft = snapshot
+      panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
+      if (demo) panel.append(el('p', 'Only you can see your demo comments. We remember you with a cookie. Sign up to keep them; unsaved demos expire after 14 days.', 'muted'))
+      if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
+      messageForm('What should change?', async body => {
+        if (!draft || draft.page !== pageURL()) throw new Error('The page changed. Select the element again.')
+        const result = await api('/comments', 'POST', {...draft, body})
+        threads.push(result.data); filter = 'open'; renderPins(); showThread(result.data); announce('Comment posted.')
+      })
+    }
+    function closeContext(restore = false) {
+      const wasOpen = !menu.hidden
+      menu.hidden = true; menuSnapshot = null
+      if (restore && wasOpen && menuFocus?.isConnected) menuFocus.focus({preventScroll: true})
+    }
+    function contextMenu(event) {
+      closeContext()
+      if (!commenting || busy || event.shiftKey || event.composedPath().includes(host)) return
+      let anchor
+      try { anchor = capture(event.target, event.clientX, event.clientY, {captureText: script.dataset.captureText !== 'false'}) }
+      catch { return } // Preserve native menus on excluded and editable content.
+      event.preventDefault(); event.stopImmediatePropagation()
+      setArmed(false)
+      menuSnapshot = {anchor, context: context(), page: pageURL()}
+      menuFocus = shadow.activeElement || document.activeElement
+      menu.hidden = false
+      const rect = event.target.getBoundingClientRect()
+      const x = event.clientX || rect.left, y = event.clientY || rect.bottom
+      menu.style.left = `${Math.max(8, Math.min(x, innerWidth - menu.offsetWidth - 8))}px`
+      menu.style.top = `${Math.max(8, Math.min(y, innerHeight - menu.offsetHeight - 8))}px`
+      menuAdd.focus({preventScroll: true})
+    }
+    function dismissContext(event) { if (!event.composedPath().includes(menu)) closeContext() }
+    function layoutChanged() { closeContext(); outline.hidden = true; schedule() }
+    function blur() { closeContext() }
     function blockHost(event) { if (armed && !event.composedPath().includes(host)) { event.stopImmediatePropagation(); event.preventDefault() } }
     function hover(event) {
       if (!armed || event.composedPath().includes(host)) return
       const rect = event.target.getBoundingClientRect()
       outline.hidden = false; outline.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px`
     }
-    function keydown(event) { if (event.key === 'Escape') { setArmed(false); closePanel(); toggle.focus() } }
+    function keydown(event) {
+      if (event.key !== 'Escape' || !commenting) return
+      event.preventDefault()
+      if (!menu.hidden) { closeContext(true); return }
+      if (armed || !panel.hidden) { setArmed(false); closePanel(); addButton.focus(); return }
+      setCommenting(false); toggle.focus()
+    }
     window.addEventListener('click', choose, true)
-    window.addEventListener('contextmenu', choose, true)
+    window.addEventListener('contextmenu', contextMenu, true)
+    window.addEventListener('pointerdown', dismissContext, true)
     for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) window.addEventListener(type, blockHost, true)
     window.addEventListener('pointermove', hover, true)
     window.addEventListener('keydown', keydown)
-    window.addEventListener('scroll', schedule, true)
-    window.addEventListener('resize', schedule)
+    window.addEventListener('scroll', layoutChanged, true)
+    window.addEventListener('resize', layoutChanged)
+    window.addEventListener('blur', blur)
     const observer = new MutationObserver(schedule)
     observer.observe(document.body, {subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'open', 'aria-expanded', 'data-feedback-id', 'data-feedback-exclude']})
     const resize = new ResizeObserver(schedule); resize.observe(document.body)
@@ -270,10 +334,11 @@ if (project && !document.querySelector('fluently-feedback')) {
     }, 1000)
     function cleanup() {
       destroyed = true; clearInterval(timer); observer.disconnect(); resize.disconnect(); if (frame) cancelAnimationFrame(frame)
-      window.removeEventListener('click', choose, true); window.removeEventListener('contextmenu', choose, true)
+      window.removeEventListener('click', choose, true); window.removeEventListener('contextmenu', contextMenu, true)
+      window.removeEventListener('pointerdown', dismissContext, true)
       for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) window.removeEventListener(type, blockHost, true)
       window.removeEventListener('pointermove', hover, true); window.removeEventListener('keydown', keydown)
-      window.removeEventListener('scroll', schedule, true); window.removeEventListener('resize', schedule); host.remove()
+      window.removeEventListener('scroll', layoutChanged, true); window.removeEventListener('resize', layoutChanged); window.removeEventListener('blur', blur); host.remove()
     }
     if (invitation) nameForm()
     else await refresh(true)
