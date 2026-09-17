@@ -29,6 +29,7 @@ defmodule FluentlyWeb.Endpoint do
     from: :fluently,
     gzip: not code_reloading?,
     only: FluentlyWeb.static_paths(),
+    only_matching: ["embed-"],
     raise_on_missing_only: code_reloading?
 
   # Code reloading can be explicitly enabled under the

@@ -28,4 +28,14 @@ defmodule FluentlyWeb.DogfoodTest do
     document = build_conn() |> get("/") |> html_response(200) |> LazyHTML.from_document()
     refute Enum.any?(LazyHTML.query(document, "script#fluently-embed"))
   end
+
+  test "fingerprinted embed assets are served by the endpoint" do
+    name = "embed-" <> String.replace(Ecto.UUID.generate(), "-", "") <> ".js"
+    path = Application.app_dir(:fluently, "priv/static/" <> name)
+    File.write!(path, "/* fingerprinted embed fixture */")
+    on_exit(fn -> File.rm!(path) end)
+    conn = build_conn() |> get("/" <> name <> "?vsn=d")
+    assert response(conn, 200) == "/* fingerprinted embed fixture */"
+    assert get_resp_header(conn, "content-type") == ["text/javascript"]
+  end
 end
