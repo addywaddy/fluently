@@ -61,8 +61,10 @@ comments, and unlocks project creation in `/app`. A new session replaces the ano
 session. `/login` restores a registered account on another device. Login opens that
 account’s existing demo; it does not merge a different anonymous demo. Currently one
 active account session is supported: signing in elsewhere revokes the earlier session.
-Email addresses are unverified identifiers; email delivery, verification and password
-recovery are not implemented yet.
+Email addresses are unverified identifiers; verification and password recovery flows
+are not implemented yet. Production email delivery is configured for Resend using
+`RESEND_API_KEY` and `MAIL_FROM`; see the deployment guide. Development keeps the local
+Swoosh mailbox at `/dev/mailbox`.
 
 Unclaimed demos expire 14 days after creation and are deleted by an hourly cleanup
 worker (up to 500 per run). Clearing cookies loses access to an unclaimed demo. Signup

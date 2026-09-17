@@ -42,11 +42,13 @@ env:
     PHX_HOST: <%= ENV.fetch("PHX_HOST").to_json %>
     PORT: "4000"
     POOL_SIZE: "5"
+    MAIL_FROM: <%= ENV.fetch("MAIL_FROM").to_json %>
 <% if ENV["FLUENTLY_PROJECT_ID"] && !ENV["FLUENTLY_PROJECT_ID"].empty? %>
     FLUENTLY_PROJECT_ID: <%= ENV.fetch("FLUENTLY_PROJECT_ID").to_json %>
 <% end %>
   secret:
     - SECRET_KEY_BASE
+    - RESEND_API_KEY
 
 deploy_timeout: 90
 

@@ -43,6 +43,7 @@ config :phoenix_live_view,
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
 config :fluently, Fluently.Mailer, adapter: Swoosh.Adapters.Local
+config :fluently, :mail_from, {"Fluently", "hello@fluently.test"}
 
 # Configure esbuild (the version is required)
 config :esbuild,

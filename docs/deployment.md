@@ -24,6 +24,7 @@ export PHX_HOST=feedback.your-domain.com
 export FLUENTLY_IMAGE=your-registry-user/fluently
 export KAMAL_REGISTRY_USERNAME=your-registry-user
 export LITESTREAM_BUCKET=your-dedicated-fluently-backup-bucket
+export MAIL_FROM=hello@your-verified-sending-domain.com
 # Optional: KAMAL_REGISTRY_SERVER, FLUENTLY_ARCH, FLUENTLY_SSH_USER (default root)
 cp .kamal/secrets.example .kamal/secrets
 ```
@@ -67,6 +68,25 @@ See the backup setup and restore procedure below.
 References: [Kamal configuration](https://kamal-deploy.org/docs/configuration/overview/),
 [proxy and health checks](https://kamal-deploy.org/docs/configuration/proxy/),
 [Phoenix releases](https://phoenix.hexdocs.pm/Mix.Tasks.Phx.Gen.Release.html).
+
+## Transactional email (Resend)
+
+Verify a sending domain in Resend using the DNS records it provides. Create a sending API
+key restricted to that domain where possible, then provide `RESEND_API_KEY` through your
+shell/password manager or ignored `.kamal/secrets`. Export `MAIL_FROM` as a bare email
+address on the verified domain, for example `hello@mail.your-domain.com`. Kamal passes
+the API key as a secret and the sender as a clear runtime setting.
+
+Production requires both variables at startup and uses `Swoosh.Adapters.Resend` through
+`Fluently.Mailer`. `Fluently.Mailer.sender/0` returns the configured sender tuple for future
+email templates. Development still previews emails at `/dev/mailbox`, and tests use
+Swoosh's test adapter without sending external email.
+
+This configures the delivery provider only. Verification, password resets, invitations,
+and comment notifications do not send email yet. No live test email was sent during
+setup. Once those flows are implemented, verify delivery to an address you control.
+
+Reference: [Resend Swoosh adapter](https://swoosh.hexdocs.pm/Swoosh.Adapters.Resend.html).
 
 ## Litestream backups
 
@@ -148,6 +168,8 @@ Supply through your host's secret store or an ignored `.env` file:
 
 - `SECRET_KEY_BASE`: generate with `mix phx.gen.secret`; keep stable across deployments.
 - `PHX_HOST`: public hostname without scheme/path.
+- `RESEND_API_KEY`: sending API key (secret).
+- `MAIL_FROM`: sender email address on a verified Resend domain.
 - Optional `DATABASE_PATH`: absolute path on persistent local storage (required for native releases).
 - `PORT`: default 4000.
 - `POOL_SIZE`: default 5.
