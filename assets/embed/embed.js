@@ -1,4 +1,4 @@
-import {capture, resolve, context, pageURL} from './anchor.mjs'
+import {capture, resolve, context, pageURL, visible, excluded} from './anchor.mjs'
 import {placement} from './placement.mjs'
 import {captureSnapshot} from './snapshot.mjs'
 
@@ -359,13 +359,13 @@ if (project && !document.querySelector('fluently-feedback')) {
       event.preventDefault(); event.stopImmediatePropagation()
       try {
         const anchor = capture(event.target, event.clientX, event.clientY, {captureText: script.dataset.captureText !== 'false'})
-        const snapshot = {anchor, context: context(), page: pageURL()}
+        const snapshot = {anchor, context: context(), page: pageURL(), element: event.target}
         beginDraft(snapshot)
       } catch (e) { announce(e.message); hint.textContent = e.message + ' · Esc to cancel' }
     }
     function beginDraft(snapshot) {
-      const {anchor} = snapshot
-      setArmed(false); openPanel('New comment', 'draft'); draft = snapshot
+      const {anchor, element} = snapshot
+      setArmed(false); openPanel('New comment', 'draft'); draft = {anchor, context: snapshot.context, page: snapshot.page}
       selectedAnchor = anchor; restoreOutline()
       panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
       if (demo) panel.append(el('p', 'Only you can see your demo comments. We remember you with a cookie. Sign up to keep them; unsaved demos expire after 14 days.', 'muted'))
@@ -375,7 +375,8 @@ if (project && !document.querySelector('fluently-feedback')) {
       const attach = button('Attach element snapshot', async () => {
         capturing = true; attach.disabled = true; snapshotError.textContent = ''
         try {
-          const target = resolve(anchor)
+          const target = element?.isConnected && visible(element) && !excluded(element)
+            ? {state: 'resolved', element} : resolve(anchor)
           if (target.state !== 'resolved') throw new Error('The element is no longer visible. Post without a snapshot or select it again.')
           let timer
           try {
@@ -433,7 +434,7 @@ if (project && !document.querySelector('fluently-feedback')) {
       catch { return } // Preserve native menus on excluded and editable content.
       event.preventDefault(); event.stopImmediatePropagation()
       setArmed(false)
-      menuSnapshot = {anchor, context: context(), page: pageURL()}
+      menuSnapshot = {anchor, context: context(), page: pageURL(), element: event.target}
       menuFocus = shadow.activeElement || document.activeElement
       menu.hidden = false
       const rect = event.target.getBoundingClientRect()

@@ -116,3 +116,9 @@ from an anchor or taken automatically later. Web-font scanning is disabled and i
 fetches omit credentials/referrers; this trades fidelity for a smaller capture surface.
 Requests allow 300 KiB only for snapshot JSON (base64 overhead), while ordinary JSON
 requests retain 32 KiB. Raster size is limited to 200 KiB and 1200 pixels per dimension.
+
+Image anchors without stable IDs can use a bounded image source origin/path plus alt
+text. Query strings, fragments and URL credentials are excluded; text-capture opt-out
+also disables these hints. Selector matches must agree with image identity; ambiguous
+fallback matches remain unpinned. Snapshot capture retains the exact selected DOM node
+only in memory and checks visibility/exclusions again; it is never sent with the anchor.

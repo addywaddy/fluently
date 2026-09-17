@@ -17,6 +17,7 @@ defmodule Fluently.Feedback.Anchor do
              ["feedback_id", "id", "role", "label", "text"],
              &optional_text?(target[&1], 160)
            ),
+         true <- image_source?(target["image_src"]),
          true <- number?(point["x"], 0, 1) and number?(point["y"], 0, 1),
          true <- map_size(anchor) == 5 do
       {:ok,
@@ -24,7 +25,7 @@ defmodule Fluently.Feedback.Anchor do
          "version" => 1,
          "platform" => "web",
          "type" => "dom",
-         "target" => Map.take(target, ~w(tag selector feedback_id id role label text)),
+         "target" => Map.take(target, ~w(tag selector feedback_id id role label text image_src)),
          "point" => Map.take(point, ~w(x y))
        }}
     else
@@ -51,6 +52,21 @@ defmodule Fluently.Feedback.Anchor do
   end
 
   def context(_), do: {:error, :invalid_context}
+
+  defp image_source?(value) when value in [nil, ""], do: true
+
+  defp image_source?(value) when is_binary(value) and byte_size(value) <= 1000 do
+    case URI.new(value) do
+      {:ok, %URI{scheme: scheme, host: host, userinfo: nil, query: nil, fragment: nil}}
+      when scheme in ["http", "https"] and is_binary(host) ->
+        true
+
+      _ ->
+        false
+    end
+  end
+
+  defp image_source?(_), do: false
 
   defp text?(value, max),
     do: is_binary(value) and String.length(value) > 0 and String.length(value) <= max

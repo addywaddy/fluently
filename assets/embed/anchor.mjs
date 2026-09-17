@@ -4,6 +4,17 @@ export function excluded(element) {
   return !element || Boolean(element.closest(excludedSelector)) || Boolean(element.querySelector(excludedSelector))
 }
 const bounded = value => typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 160) : ''
+export function imageSource(element) {
+  if (element.tagName.toLowerCase() !== 'img') return ''
+  try {
+    const sourceAttribute = element.getAttribute('src')
+    if (!sourceAttribute) return ''
+    const url = new URL(sourceAttribute, document.baseURI)
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return ''
+    const source = url.origin + url.pathname
+    return source.length <= 1000 ? source : ''
+  } catch { return '' }
+}
 export function capture(element, x, y, {captureText = true} = {}) {
   if (excluded(element)) throw new Error('This area is excluded from feedback. Select a non-sensitive element.')
   const target = {tag: element.tagName.toLowerCase(), selector: selectorFor(element)}
@@ -14,7 +25,8 @@ export function capture(element, x, y, {captureText = true} = {}) {
   // Only a selected target without stable identity needs bounded semantic text. Installations can disable it.
   if (captureText && !target.feedback_id && !target.id) {
     target.text = bounded(element.textContent)
-    target.label = bounded(element.getAttribute('aria-label'))
+    target.label = bounded(element.getAttribute('aria-label') || (target.tag === 'img' ? element.getAttribute('alt') : ''))
+    if (target.tag === 'img') target.image_src = imageSource(element)
   }
   const rect = element.getBoundingClientRect()
   const fraction = (value, start, size) => Math.max(0, Math.min(1, size ? (value - start) / size : 0.5))
@@ -50,7 +62,8 @@ export function resolve(anchor, root = document) {
   const query = selector => { try { return [...root.querySelectorAll(selector)] } catch { return [] } }
   const match = element => !excluded(element) && element.tagName.toLowerCase() === target.tag &&
     (!target.role || element.getAttribute('role') === target.role) &&
-    (!target.label || bounded(element.getAttribute('aria-label')) === target.label) &&
+    (!target.label || bounded(element.getAttribute('aria-label') || (target.tag === 'img' ? element.getAttribute('alt') : '')) === target.label) &&
+    (!target.image_src || imageSource(element) === target.image_src) &&
     (!target.text || bounded(element.textContent) === target.text)
   let candidates
   if (target.feedback_id) {
@@ -60,7 +73,7 @@ export function resolve(anchor, root = document) {
     candidates = query(`#${CSS.escape(target.id)}`).filter(match)
   } else {
     // A positional selector alone cannot establish identity after a layout change.
-    if (!target.text && !target.label) return {state: 'uncertain'}
+    if (!target.text && !target.label && !target.image_src) return {state: 'uncertain'}
     candidates = query(target.selector).filter(match)
     if (!candidates.length) candidates = query(target.tag).filter(match)
   }

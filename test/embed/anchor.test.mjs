@@ -53,3 +53,24 @@ test('closed details hides its children even if they have layout rectangles', ()
   target.parentElement = {tagName: 'DETAILS', nodeType: 1, hasAttribute: () => false, querySelector: () => null, parentElement: null}
   assert.equal(resolve(anchor, {querySelectorAll: () => [target]}).state, 'hidden')
 })
+
+test('image identity survives serialization without query strings or fragments', () => {
+  globalThis.document = {documentElement: {}, baseURI: 'https://example.com/'}
+  const image = element({src: '/logo.svg?token=secret#private', alt: 'Company'})
+  image.tagName = 'IMG'; image.textContent = ''; image.parentElement = {children: [image], tagName: 'BODY', getAttribute: () => null}
+  image.parentElement.id = 'header'
+  const saved = JSON.parse(JSON.stringify(capture(image, 20, 30)))
+  assert.equal(saved.target.image_src, 'https://example.com/logo.svg')
+  assert.equal(saved.target.label, 'Company')
+  assert.equal(resolve(saved, {querySelectorAll: () => [image]}).element, image)
+  const changed = {...image, getAttribute: key => key === 'src' ? '/other.svg' : image.getAttribute(key)}
+  assert.equal(resolve(saved, {querySelectorAll: () => [changed]}).state, 'missing')
+  const privateCapture = capture(image, 20, 30, {captureText: false})
+  assert.equal(privateCapture.target.image_src, undefined)
+})
+test('duplicate images remain ambiguous without a unique selector match', () => {
+  globalThis.document = {baseURI: 'https://example.com/'}
+  const image = element({src: '/logo.svg'}); image.tagName = 'IMG'
+  const saved = {version: 1, platform: 'web', type: 'dom', target: {tag: 'img', selector: '#removed', image_src: 'https://example.com/logo.svg'}}
+  assert.equal(resolve(saved, {querySelectorAll: selector => selector === '#removed' ? [] : [image, {...image}]}).state, 'ambiguous')
+})

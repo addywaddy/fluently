@@ -121,4 +121,21 @@ defmodule Fluently.FeedbackTest do
 
     assert {:error, :invalid_page} = Threads.page(ctx.project, "https://example.com:bad/")
   end
+
+  test "image anchors round-trip only sanitized bounded resource URLs" do
+    anchor = Fluently.FeedbackFixtures.attrs()["anchor"]
+    image = put_in(anchor, ["target", "image_src"], "https://example.com/logo.svg")
+    assert {:ok, normalized} = Fluently.Feedback.Anchor.normalize(image)
+    assert normalized["target"]["image_src"] == "https://example.com/logo.svg"
+
+    for source <- [
+          "https://example.com/logo.svg?secret=token",
+          "https://example.com/logo.svg#private",
+          "data:image/png;base64,secret",
+          "https://user:password@example.com/logo.svg"
+        ] do
+      assert {:error, :invalid_anchor} =
+               Fluently.Feedback.Anchor.normalize(put_in(anchor, ["target", "image_src"], source))
+    end
+  end
 end
