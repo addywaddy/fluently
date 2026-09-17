@@ -113,7 +113,8 @@ Shadow DOM prevents normal CSS collisions. Only feedback mode intercepts host se
 ## Element snapshots
 
 Select an element, choose **Attach element snapshot**, inspect the preview, then post.
-You can remove the preview before posting. Reopen the thread and choose **View element
+Unsupported or private targets show a disabled snapshot button with an explanation;
+commenting remains available. You can remove the preview before posting. Reopen the thread and choose **View element
 snapshot** to see the historical image. Capture/upload failure does not lose the comment;
 a failed upload offers a retry while the thread stays open.
 

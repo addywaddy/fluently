@@ -1,9 +1,9 @@
 import {toCanvas} from '../vendor/html-to-image/es/index.js'
-import {snapshotNodeAllowed, snapshotSize} from './snapshot-policy.mjs'
+import {snapshotNodeAllowed, snapshotSize, snapshotUnavailableReason} from './snapshot-policy.mjs'
 
 export async function captureSnapshot(element) {
-  if (!element?.isConnected || !snapshotNodeAllowed(element)) throw new Error('This element is excluded from snapshots.')
-  if (element.querySelectorAll('*').length > 1500) throw new Error('Select a smaller element for a snapshot.')
+  const reason = snapshotUnavailableReason(element)
+  if (reason) throw new Error(reason)
   const {width, height} = element.getBoundingClientRect()
   const size = snapshotSize(width, height)
   const canvas = await toCanvas(element, {

@@ -1,6 +1,7 @@
 import {capture, resolve, context, pageURL, visible, excluded} from './anchor.mjs'
 import {placement} from './placement.mjs'
 import {captureSnapshot} from './snapshot.mjs'
+import {snapshotUnavailableReason} from './snapshot-policy.mjs'
 
 const script = document.currentScript
 const project = script?.dataset.project
@@ -372,27 +373,39 @@ if (project && !document.querySelector('fluently-feedback')) {
       if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
       let image = null, capturing = false
       const snapshotBox = el('div'), preview = el('div'), snapshotError = errorBox()
+      const unavailable = el('p', '', 'muted'); unavailable.id = 'snapshot-unavailable'
+      const snapshotTarget = () => element?.isConnected && visible(element) && !excluded(element)
+        ? element : resolve(anchor).element
+      const refreshAvailability = () => {
+        const reason = snapshotUnavailableReason(snapshotTarget())
+        attach.disabled = capturing || Boolean(reason)
+        attach.style.cursor = reason ? 'not-allowed' : ''
+        unavailable.textContent = reason ? `${reason} You can still post a comment.` : ''
+        unavailable.hidden = !reason
+      }
       const attach = button('Attach element snapshot', async () => {
         capturing = true; attach.disabled = true; snapshotError.textContent = ''
         try {
-          const target = element?.isConnected && visible(element) && !excluded(element)
-            ? {state: 'resolved', element} : resolve(anchor)
-          if (target.state !== 'resolved') throw new Error('The element is no longer visible. Post without a snapshot or select it again.')
+          const target = snapshotTarget()
+          const reason = snapshotUnavailableReason(target)
+          if (reason) throw new Error(reason)
           let timer
           try {
-            image = await Promise.race([captureSnapshot(target.element), new Promise((_, reject) => {
+            image = await Promise.race([captureSnapshot(target), new Promise((_, reject) => {
               timer = setTimeout(() => reject(new Error('Capture timed out. You can still post your comment.')), 12000)
             })])
           } finally { clearTimeout(timer) }
           const img = el('img', '', 'snapshot'); img.alt = 'Snapshot preview — check before posting'; img.src = image
           preview.replaceChildren(img, el('p', 'Check this preview for private information before posting.', 'muted'), button('Remove snapshot', () => {
-            image = null; preview.replaceChildren(); attach.hidden = false
+            image = null; preview.replaceChildren(); attach.hidden = false; refreshAvailability()
           }))
           attach.hidden = true
         } catch (e) { image = null; snapshotError.textContent = e.message }
-        finally { capturing = false; attach.disabled = false }
+        finally { capturing = false; refreshAvailability() }
       })
-      snapshotBox.append(attach, preview, snapshotError, el('p', 'Optional snapshot. Marked private areas and form controls are omitted. Fonts and images may differ.', 'muted'))
+      attach.setAttribute('aria-describedby', unavailable.id)
+      refreshAvailability()
+      snapshotBox.append(attach, unavailable, preview, snapshotError, el('p', 'Optional snapshot. Marked private areas and form controls are omitted. Fonts and images may differ.', 'muted'))
       if (script.dataset.screenshots !== 'false' && script.dataset.captureText !== 'false') panel.append(snapshotBox)
       messageForm('What should change?', async body => {
         if (!draft || draft.page !== pageURL()) throw new Error('The page changed. Select the element again.')
