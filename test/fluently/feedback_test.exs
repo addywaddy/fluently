@@ -1,5 +1,5 @@
 defmodule Fluently.FeedbackTest do
-  use Fluently.DataCase, async: true
+  use Fluently.DataCase, async: false
   alias Fluently.{Feedback, Threads}
 
   setup do

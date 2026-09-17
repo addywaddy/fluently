@@ -1,14 +1,16 @@
 # Fluently
 
 Figma-style conversations on real websites, with structured context for people and agents.
-Phoenix/PostgreSQL monolith, plain CSS management UI, and a standalone ~22 KB JavaScript embed.
+Phoenix/SQLite monolith, plain CSS management UI, and a standalone ~22 KB JavaScript embed.
 The landing design uses plain HTML/CSS; the optional demo uses the embed SDK. The original `designs/` files are unchanged.
 
 ## Local development
 
-Requires Elixir 1.17+ / compatible OTP, PostgreSQL, and Node 22+ for SDK tests only.
-This build was checked with Elixir 1.20.2 / OTP 29. Configure database credentials in
-`config/dev.exs` and `config/test.exs` (defaults: postgres/postgres on localhost).
+Requires Elixir 1.17+ / compatible OTP and Node 22+ for SDK tests only.
+This build was checked with Elixir 1.20.2 / OTP 29. SQLite is embedded; no database
+server is needed. Development and test databases live in ignored `data/` files.
+Production uses persistent local storage; see [deployment](docs/deployment.md).
+Litestream backups are deferred.
 
 ```sh
 mix setup

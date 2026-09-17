@@ -1,18 +1,62 @@
 # Deploying the pilot
 
-One Phoenix release plus PostgreSQL. Deploy a single app instance behind an HTTPS reverse proxy.
-A hosting destination is not configured in this repository.
+One Phoenix instance with SQLite on persistent local storage. A hosting destination is
+not configured. Litestream is the intended backup approach but is deferred; automated
+remote backups and restore are not configured yet.
 
-## Build
+## Build and configuration
 
 ```sh
 docker build -t fluently .
+docker volume create fluently-data
 ```
 
-The generated multi-stage Dockerfile pins the Elixir/OTP and Debian versions, builds the standalone
-embed and runs as an unprivileged user. There is no Node runtime dependency. The local Docker daemon
-must be running to validate/build the image. Alternatively, build a release on the same OS/architecture
-as the deployment target:
+The image runs as `nobody` and defaults to `DATABASE_PATH=/data/fluently.db`.
+A fresh named volume inherits `/data` permissions. For an existing volume, ensure UID
+65534 can write to its directory and files. Keep the entire directory persistent:
+SQLite also uses WAL and shared-memory files. Do not use network filesystems or run
+multiple application replicas against this file. Never bake databases into the image.
+
+Supply through your host's secret store or an ignored `.env` file:
+
+- `SECRET_KEY_BASE`: generate with `mix phx.gen.secret`; keep stable across deployments.
+- `PHX_HOST`: public hostname without scheme/path.
+- Optional `DATABASE_PATH`: absolute path on persistent local storage (required for native releases).
+- `PORT`: default 4000.
+- `POOL_SIZE`: default 5.
+- `FLUENTLY_PROJECT_ID`: optional public project UUID for the landing demo.
+
+## Initialize and run
+
+Run migrations before starting the application, mounting the same persistent volume:
+
+```sh
+docker run --rm --env-file .env -v fluently-data:/data fluently /app/bin/migrate
+```
+
+Run behind an HTTPS reverse proxy:
+
+```sh
+docker run -d --name fluently --init --restart unless-stopped \
+  --env-file .env -v fluently-data:/data -p 127.0.0.1:4000:4000 fluently
+```
+
+Stop the old application before migrating and starting its replacement. Reuse the same
+volume; a new empty volume creates an empty database. Production enforces HTTPS and
+secure cookies. The proxy must overwrite `X-Forwarded-Proto`; expose the application port
+only to that proxy. Register at `/signup` and create projects in `/app`.
+
+Optional pilot owner provisioning:
+
+```sh
+docker exec fluently /app/bin/fluently eval 'Fluently.Release.create_workspace("Studio")'
+```
+
+Save the printed owner key privately. Do not publish logs containing credentials.
+
+## Native releases
+
+Build on the same OS/architecture as deployment:
 
 ```sh
 MIX_ENV=prod mix deps.get --only prod
@@ -20,52 +64,26 @@ MIX_ENV=prod mix assets.deploy
 MIX_ENV=prod mix release
 ```
 
-## Runtime configuration
+Set the runtime variables above and create a writable directory for `DATABASE_PATH`.
+Run `bin/migrate`, then `bin/server`. Local development uses `data/fluently_dev.db` and
+needs no separate database service. Database tests use their own SQLite file.
 
-Supply through your host’s secret store or an uncommitted env file:
+## PostgreSQL cutover
 
-- `DATABASE_URL`: PostgreSQL connection URL. Create the database before migrations.
-- `DATABASE_SSL=true`: verify TLS certificates using the system CA store; use a trusted provider certificate.
-- `SECRET_KEY_BASE`: generate with `mix phx.gen.secret`; keep stable across deploys and confidential.
-- `PHX_HOST`: public service hostname, without scheme or path.
-- `PORT`: default 4000.
-- `POOL_SIZE`: default 10.
+The pre-production local dataset was transferred with IDs, timestamps, credential hashes
+and anchor/context maps intact and every record compared after import. The source
+PostgreSQL database is unchanged. An ignored, mode-0600 export is in
+`tmp/postgres-export.etf`; treat it as sensitive and remove it once rollback is no longer
+needed. Never commit it. The initial migrations now target SQLite, not PostgreSQL.
+Do not switch back after accepting new writes without migrating those new records too.
 
-`bin/server` sets `PHX_SERVER=true`. Production enforces HTTPS and secure session cookies.
-The reverse proxy must overwrite `X-Forwarded-Proto`; expose the app port only to that proxy.
-Project origin allowlists refer to the customer website, not the service hostname.
+## Pilot checks
 
-Run once per deployment before starting/replacing the app:
+Set up and test backups before production launch. Copying only an active `.db` file can
+omit committed data still in its WAL; use SQLite's backup facilities for a consistent copy.
 
-```sh
-docker run --rm --env-file .env fluently /app/bin/migrate
-```
-
-Provision each pilot owner once (choose a workspace name):
-
-```sh
-docker run --rm --env-file .env fluently /app/bin/fluently eval 'Fluently.Release.create_workspace("Studio")'
-```
-
-Save the printed owner key securely and deliver it privately to that owner. Do not publish logs
-containing it. The owner signs in at `/app/login` and creates their own projects.
-
-Run the service behind the proxy, for example:
-
-```sh
-docker run --init --restart unless-stopped --env-file .env -p 127.0.0.1:4000:4000 fluently
-```
-
-Use managed PostgreSQL backups with a documented retention/deletion policy. Test restoration.
-Request-body limits are 32 KiB. Tokens and comment parameters are filtered from Phoenix request logs;
-do not enable body/header logging at the proxy. Invites are fragments and are removed by the embed,
-but host-page scripts can still see them before removal. Deploy the embed only on trusted sites.
-
-The limiter is per-process, expires buckets after 60 seconds, and fails closed at its 20,000-bucket cap.
-Invite exchange: 20/IP/min and 60/project/min. Authenticated API: 180 reads and 40 writes/token/min.
-Owner login: 10/IP/min. Behind a proxy, IP buckets currently use the proxy’s transport IP; this is
-conservative for a small pilot. Configure trusted-proxy IP handling and shared limits before scaling.
-
-Validate HTTPS sign-in, project creation, and an embed on a different origin after deployment.
-Check a comment persists after reload, reply/resolve works, and key rotation denies the old session.
-Keep the service URL stable because installed snippets reference it.
+Request bodies are limited to 32 KiB. Avoid body/header logging at the proxy.
+The in-memory limiter remains single-instance. Behind a proxy, IP limits currently use
+the proxy transport IP; configure trusted-proxy handling before scaling.
+Validate HTTPS sign-in, project creation, another-origin embed, comment persistence,
+reply/resolve/delete, and credential rotation. Keep the public service URL stable.

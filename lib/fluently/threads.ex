@@ -70,7 +70,7 @@ defmodule Fluently.Threads do
 
   def reply(project, %Reviewer{project_id: pid} = reviewer, id, body) when pid == project.id do
     Repo.transaction(fn ->
-      thread = locked_thread(project, id) || Repo.rollback(:not_found)
+      thread = transaction_thread(project, id) || Repo.rollback(:not_found)
 
       case add_message(thread, reviewer, body) do
         {:ok, message} ->
@@ -104,7 +104,7 @@ defmodule Fluently.Threads do
   def delete_message(project, %Reviewer{project_id: pid} = reviewer, thread_id, message_id)
       when pid == project.id do
     Repo.transaction(fn ->
-      with %Thread{} = thread <- locked_thread(project, thread_id),
+      with %Thread{} = thread <- transaction_thread(project, thread_id),
            thread = preload(thread),
            %Message{} = message <- Enum.find(thread.messages, &(&1.id == message_id)),
            true <- message.reviewer_id == reviewer.id do
@@ -161,12 +161,10 @@ defmodule Fluently.Threads do
 
   def page(_, _), do: {:error, :invalid_page}
 
-  defp locked_thread(project, id) do
+  defp transaction_thread(project, id) do
     case Ecto.UUID.cast(id) do
       {:ok, id} ->
-        Repo.one(
-          from t in Thread, where: t.project_id == ^project.id and t.id == ^id, lock: "FOR UPDATE"
-        )
+        Repo.one(from t in Thread, where: t.project_id == ^project.id and t.id == ^id)
 
       _ ->
         nil

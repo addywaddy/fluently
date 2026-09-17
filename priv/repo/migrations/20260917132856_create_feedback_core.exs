@@ -41,14 +41,18 @@ defmodule Fluently.Repo.Migrations.CreateFeedbackCore do
       add :project_id, references(:projects, type: :uuid, on_delete: :delete_all), null: false
       add :reviewer_id, references(:reviewers, type: :uuid), null: false
       add :page, :text, null: false
-      add :status, :string, null: false, default: "open"
+
+      add :status, :string,
+        null: false,
+        default: "open",
+        check: %{name: "valid_status", expr: "status IN ('open', 'resolved')"}
+
       add :anchor, :map, null: false
       add :context, :map, null: false
       timestamps(type: :utc_datetime_usec)
     end
 
     create index(:feedback_threads, [:project_id, :page, :status])
-    create constraint(:feedback_threads, :valid_status, check: "status IN ('open', 'resolved')")
 
     create table(:feedback_messages, primary_key: false) do
       add :id, :uuid, primary_key: true

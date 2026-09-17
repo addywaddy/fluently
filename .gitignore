@@ -50,3 +50,7 @@ npm-debug.log
 /priv/static/**/*.gz
 
 .env.*
+
+# SQLite database, WAL, shared memory, and local migration exports
+/data/
+*.db-*

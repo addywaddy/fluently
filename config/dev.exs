@@ -2,10 +2,7 @@ import Config
 
 # Configure your database
 config :fluently, Fluently.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "fluently_dev",
+  database: Path.expand("../data/fluently_dev.db", __DIR__),
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10

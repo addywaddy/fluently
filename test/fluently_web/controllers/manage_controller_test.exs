@@ -1,5 +1,5 @@
 defmodule FluentlyWeb.ManageControllerTest do
-  use FluentlyWeb.ConnCase, async: true
+  use FluentlyWeb.ConnCase, async: false
   alias Fluently.Feedback
 
   test "owner login, project creation and one-time keys render", %{conn: conn} do

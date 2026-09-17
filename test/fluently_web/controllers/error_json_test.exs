@@ -1,5 +1,5 @@
 defmodule FluentlyWeb.ErrorJSONTest do
-  use FluentlyWeb.ConnCase, async: true
+  use FluentlyWeb.ConnCase, async: false
 
   test "renders 404" do
     assert FluentlyWeb.ErrorJSON.render("404.json", %{}) == %{errors: %{detail: "Not Found"}}

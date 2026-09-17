@@ -1,6 +1,6 @@
 # MVP decisions
 
-- Keep Phoenix/PostgreSQL: an existing working foundation, one service, no stack migration.
+- Phoenix/SQLite monolith: one application instance with persistent local storage. See the SQLite decision below.
 - Public signup creates an account-owned workspace. Operator-issued pilot owner keys remain supported alongside account sessions. Customer reviewers still use project-specific invitations.
 - Projects own reviewers and threads; all lookups are project scoped. The snippet contains only a public UUID. An exact allowed origin is additional browser protection, never authentication.
 - Review links carry a separate 14-day secret in the URL fragment. The SDK removes it immediately and exchanges it plus a display name for a signed 24-hour review session. Rotating credentials revokes existing sessions. Guests can create, read, reply, and resolve; reviewers can delete their own replies or delete a thread they started; owners can moderate threads through the dashboard. Deleting an opening message deletes the complete thread, with an explicit UI warning. Message deletion and reply creation lock the parent thread to serialize concurrent changes. Display names are self-asserted, not verified identities.
@@ -43,3 +43,23 @@ is 15 characters; login and signup are rate-limited. Email is an unverified logi
 never a basis for trusting or merging identities. Email verification and password recovery
 remain a follow-up before a wider public launch; no email infrastructure is required to
 exercise the demo-to-account flow locally.
+
+## SQLite (2026-09-17)
+
+Use `ecto_sqlite3` in every environment. The pilot has short writes and frequent reads;
+removing a separate database server simplifies development and single-host deployment.
+WAL permits concurrent reads, foreign keys remain enforced, synchronous FULL protects
+committed local writes, and a 5-second busy timeout handles brief writer contention.
+All Ecto transactions default to IMMEDIATE: reserve the writer before reading, so
+signup/expiry and reply/deletion decisions remain atomic without PostgreSQL row locks.
+Password hashing stays outside transactions. Database sandbox tests run synchronously.
+
+The two initial migrations were adapted for fresh SQLite installations (including the
+status check constraint). This is a deliberate pre-production backend replacement,
+not a migration to run against a deployed PostgreSQL database. Existing local data was
+exported and imported with IDs, timestamps, binary credential hashes and JSON preserved;
+the old PostgreSQL database remains untouched for rollback.
+
+Deploy one application instance on persistent local storage. SQLite is not a shared-disk
+clustering solution. Litestream is the intended backup approach but is deferred at the
+user's request; no automated remote backup or restore is configured yet.

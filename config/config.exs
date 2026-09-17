@@ -11,6 +11,14 @@ config :fluently,
   ecto_repos: [Fluently.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Reserve the SQLite writer before read/modify/write transactions. Keep these short.
+config :fluently, Fluently.Repo,
+  journal_mode: :wal,
+  foreign_keys: :on,
+  synchronous: :full,
+  busy_timeout: 5000,
+  default_transaction_mode: :immediate
+
 # Configure the endpoint
 config :fluently, FluentlyWeb.Endpoint,
   url: [host: "localhost"],

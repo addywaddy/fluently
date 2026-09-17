@@ -1,5 +1,5 @@
 defmodule FluentlyWeb.FeedbackAPITest do
-  use FluentlyWeb.ConnCase, async: true
+  use FluentlyWeb.ConnCase, async: false
   alias Fluently.Feedback
 
   setup do

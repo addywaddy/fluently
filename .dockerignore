@@ -50,3 +50,7 @@ erl_crash.dump
 designs
 .DS_Store
 /priv/static/embed*.js
+
+# SQLite database, WAL, shared memory, and local migration exports
+/data/
+*.db-*

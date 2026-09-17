@@ -24,7 +24,7 @@ defmodule Fluently.Accounts do
 
   def first_comment(account, attrs) do
     Repo.transaction(fn ->
-      {account, token} = if account, do: {lock(account), nil}, else: anonymous!()
+      {account, token} = if account, do: {reload_active_account(account), nil}, else: anonymous!()
       {account, project, reviewer} = ensure_demo!(account)
 
       case Threads.create(project, reviewer, attrs) do
@@ -37,7 +37,7 @@ defmodule Fluently.Accounts do
   def reviewer(account), do: Repo.get(Reviewer, account.reviewer_id)
 
   def register(account, attrs) do
-    # Hash outside the transaction; rows only stay locked for database work.
+    # Hash outside the transaction; the writer only stays reserved for database work.
     changeset = registration_changeset(%Account{}, attrs)
 
     if changeset.valid? do
@@ -45,7 +45,7 @@ defmodule Fluently.Accounts do
       password_hash = password_hash(get_change(changeset, :password), salt)
 
       Repo.transaction(fn ->
-        account = if account, do: lock(account), else: elem(anonymous!(), 0)
+        account = if account, do: reload_active_account(account), else: elem(anonymous!(), 0)
         if account.email, do: Repo.rollback(:already_registered)
         token = Feedback.secret()
 
@@ -106,7 +106,7 @@ defmodule Fluently.Accounts do
   def logout(account),
     do: account |> change(session_hash: nil, session_expires_at: nil) |> Repo.update()
 
-  # Run periodically; lock each identity so signup and expiry cannot race.
+  # The immediate transaction serializes expiry with signup before reading identities.
   def prune_expired do
     now = DateTime.utc_now()
 
@@ -115,7 +115,6 @@ defmodule Fluently.Accounts do
         Repo.all(
           from a in Account,
             where: not is_nil(a.expires_at) and a.expires_at <= ^now,
-            lock: "FOR UPDATE",
             limit: 500
         )
 
@@ -177,14 +176,13 @@ defmodule Fluently.Accounts do
     end
   end
 
-  defp lock(account) do
+  defp reload_active_account(account) do
     now = DateTime.utc_now()
 
     Repo.one(
       from a in Account,
         where: a.id == ^account.id and a.session_hash == ^account.session_hash,
-        where: a.session_expires_at > ^now and (is_nil(a.expires_at) or a.expires_at > ^now),
-        lock: "FOR UPDATE"
+        where: a.session_expires_at > ^now and (is_nil(a.expires_at) or a.expires_at > ^now)
     ) || Repo.rollback(:expired)
   end
 
