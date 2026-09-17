@@ -26,10 +26,11 @@ if (project && !document.querySelector('fluently-feedback')) {
     const style = document.createElement('style')
     if (script.dataset.styleNonce) style.nonce = script.dataset.styleNonce
     style.textContent = `
-      .menu{position:fixed;z-index:1;min-width:170px;max-width:calc(100vw - 16px);padding:5px;background:white;border:1px solid #ccd6e4;border-radius:9px;box-shadow:0 8px 28px #14243a30;pointer-events:auto;font:13px/1.5 system-ui,sans-serif}.menu button{display:block;width:100%;text-align:left;white-space:nowrap}.controls{display:contents}
+      .menu{position:fixed;z-index:1;min-width:170px;max-width:calc(100vw - 16px);padding:5px;background:white;border:1px solid #ccd6e4;border-radius:9px;box-shadow:0 8px 28px #14243a30;pointer-events:auto;font:13px/1.5 system-ui,sans-serif}.menu button{display:block;width:100%;text-align:left;white-space:nowrap}.controls{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:8px;background:white;border:1px solid #ccd6e4;border-radius:12px;box-shadow:0 5px 22px #14243a25;pointer-events:auto;max-width:100%}
       :host{all:initial;color-scheme:light}*{box-sizing:border-box}button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #1689d5;outline-offset:3px}
-      .bar,.panel,.hint,.pin{font:13px/1.5 system-ui,sans-serif;color:#273140;pointer-events:auto}.bar{position:fixed;bottom:16px;left:16px;display:flex;align-items:center;gap:8px;padding:8px;background:white;border:1px solid #ccd6e4;border-radius:10px;box-shadow:0 5px 22px #14243a25;max-width:calc(100vw - 32px);flex-wrap:wrap}
-      button{background:#f4f8fc;border:1px solid #ccd6e4;border-radius:6px;padding:8px 12px;color:#1c597c}.primary{background:#167dbd;color:white;border-color:#167dbd}.panel{position:fixed;right:16px;top:16px;bottom:90px;width:350px;max-width:calc(100vw - 32px);overflow:auto;padding:20px;background:white;border:1px solid #ccd6e4;border-radius:12px;box-shadow:0 10px 40px #14243a30}.panel h2{font-size:19px;margin:0 0 15px}.panel p{margin:10px 0;overflow-wrap:anywhere}.panel label{display:block;margin:12px 0}.panel input,.panel textarea,.panel select{display:block;width:100%;padding:10px;border:1px solid #bccbdb;border-radius:6px;margin-top:6px;background:white;color:#273140}.panel textarea{min-height:100px;resize:vertical}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row h2{flex:1;margin:0}.muted{font-size:11px;color:#657387}.error{color:#a3313e;font-size:12px}.thread{display:block;width:100%;text-align:left;margin-top:10px;overflow-wrap:anywhere}.message{padding:12px 0;border-bottom:1px solid #e5ebf1;white-space:pre-wrap;overflow-wrap:anywhere}.message strong{font-size:12px}.message time{display:block;font-size:10px;color:#657387}.pin{position:fixed;transform:translate(-50%,-50%);border:2px solid white;box-shadow:0 0 0 1px #167dbd;width:28px;height:28px;padding:0;background:#167dbd;color:white;border-radius:50% 50% 3px 50%;font-size:11px}.hint{position:fixed;top:16px;left:16px;padding:10px 14px;background:#243447;color:white;border-radius:8px;max-width:calc(100vw - 32px);pointer-events:none}.outline{position:fixed;border:2px solid #1689d5;background:#1689d510;pointer-events:none}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}[hidden]{display:none!important}
+      .bar,.panel,.hint,.pin{font:13px/1.5 system-ui,sans-serif;color:#273140;pointer-events:auto}.bar{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));right:max(16px,env(safe-area-inset-right));display:flex;flex-direction:column;align-items:flex-end;gap:12px;max-width:calc(100vw - 32px);pointer-events:none}
+      button{background:#f4f8fc;border:1px solid #ccd6e4;border-radius:6px;padding:8px 12px;color:#1c597c}.primary{background:#167dbd;color:white;border-color:#167dbd}.panel{position:fixed;right:16px;top:16px;bottom:160px;width:350px;max-width:calc(100vw - 32px);overflow:auto;padding:20px;background:white;border:1px solid #ccd6e4;border-radius:12px;box-shadow:0 10px 40px #14243a30}.panel h2{font-size:19px;margin:0 0 15px}.panel p{margin:10px 0;overflow-wrap:anywhere}.panel label{display:block;margin:12px 0}.panel input,.panel textarea,.panel select{display:block;width:100%;padding:10px;border:1px solid #bccbdb;border-radius:6px;margin-top:6px;background:white;color:#273140}.panel textarea{min-height:100px;resize:vertical}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row h2{flex:1;margin:0}.muted{font-size:11px;color:#657387}.error{color:#a3313e;font-size:12px}.thread{display:block;width:100%;text-align:left;margin-top:10px;overflow-wrap:anywhere}.message{padding:12px 0;border-bottom:1px solid #e5ebf1;white-space:pre-wrap;overflow-wrap:anywhere}.message strong{font-size:12px}.message time{display:block;font-size:10px;color:#657387}.pin{position:fixed;transform:translate(-50%,-50%);border:2px solid white;box-shadow:0 0 0 1px #167dbd;width:28px;height:28px;padding:0;background:#167dbd;color:white;border-radius:50% 50% 3px 50%;font-size:11px}.hint{position:fixed;top:16px;left:16px;padding:10px 14px;background:#243447;color:white;border-radius:8px;max-width:calc(100vw - 32px);pointer-events:none}.outline{position:fixed;border:2px solid #1689d5;background:#1689d510;pointer-events:none}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}[hidden]{display:none!important}
+      .launcher{display:grid;place-items:center;flex:none;width:56px;height:56px;padding:3px;border:1px solid #d6dce3;border-radius:50%;background:white;box-shadow:0 4px 18px #14243a30;pointer-events:auto;transition:box-shadow .15s,border-color .15s}.launcher svg{display:block;width:48px;height:48px;border-radius:50%;overflow:hidden;filter:grayscale(1);opacity:.7;transition:filter .15s,opacity .15s}.launcher:hover svg{opacity:1}.launcher[aria-pressed="true"]{border-color:#2093df;box-shadow:0 0 0 3px #2093df26,0 4px 18px #14243a30}.launcher[aria-pressed="true"] svg{filter:grayscale(0);opacity:1}@media(max-width:600px){.panel{bottom:220px}}@media(prefers-reduced-motion:reduce){.launcher,.launcher svg{transition:none}}
     `
     shadow.append(style)
     const el = (tag, text, className) => {
@@ -56,14 +57,30 @@ if (project && !document.querySelector('fluently-feedback')) {
     let commenting = false, menuSnapshot = null, menuFocus = null
     const announce = text => { live.textContent = text }
     const errorBox = () => { const node = el('p', '', 'error'); node.setAttribute('role', 'alert'); return node }
-    const toggle = button('Commenting: off', () => setCommenting(!commenting), 'primary')
+    const toggle = button('', () => setCommenting(!commenting), 'launcher')
+    toggle.setAttribute('aria-label', 'Commenting: off')
+    toggle.title = 'Turn commenting on'
+    // Inline the existing Fluently mark so embeds need no extra image/CSP request.
+    const logo = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    logo.setAttribute('viewBox', '0 0 200 200'); logo.setAttribute('fill', 'none')
+    logo.setAttribute('aria-hidden', 'true'); logo.setAttribute('focusable', 'false')
+    for (const [tag, attrs] of [
+      ['circle', {cx: '100', cy: '100', r: '100', fill: '#2093DF'}],
+      ['path', {d: 'M-50 109C99 148 49 69 99 69C149 69 84 146.726 149 148C214 149.275 251 109 251 109', stroke: '#93D4FF', 'stroke-width': '25'}],
+      ['path', {d: 'M-44 89C105 128 55 49 105 49C155 49 90 126.726 155 128C220 129.275 257 89 257 89', stroke: 'white', 'stroke-width': '17'}]
+    ]) {
+      const shape = document.createElementNS('http://www.w3.org/2000/svg', tag)
+      for (const [name, value] of Object.entries(attrs)) shape.setAttribute(name, value)
+      logo.append(shape)
+    }
+    toggle.append(logo)
     toggle.setAttribute('aria-pressed', 'false')
     const addButton = button('Add comment', () => setArmed(!armed))
     const controls = el('div', '', 'controls'); controls.hidden = true
     const listButton = button('Threads', () => showList())
     const exit = button('Exit', () => { try { sessionStorage.removeItem(storageKey) } catch {} ; token = null; cleanup() })
     controls.append(addButton, listButton, exit)
-    bar.append(el('strong', 'Fluently'), toggle, controls)
+    bar.append(controls, toggle)
     const saveDemo = el('a', 'Save my demo')
     if (demo) {
       saveDemo.href = '/signup'; saveDemo.style.cssText = 'color:#1c597c;padding:8px'
@@ -81,7 +98,8 @@ if (project && !document.querySelector('fluently-feedback')) {
     })
     function setCommenting(value) {
       commenting = value; controls.hidden = !value; pins.hidden = !value
-      toggle.textContent = value ? 'Commenting: on' : 'Commenting: off'
+      toggle.setAttribute('aria-label', value ? 'Commenting: on' : 'Commenting: off')
+      toggle.title = value ? 'Turn commenting off' : 'Turn commenting on'
       toggle.setAttribute('aria-pressed', String(value))
       setArmed(false)
       if (!value) closePanel()
