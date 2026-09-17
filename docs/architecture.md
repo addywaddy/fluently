@@ -15,7 +15,10 @@
 
 ## Personal landing demo and account upgrade
 
-The configured dogfood project supplies only the landing origin. Each anonymous visitor
+The configured dogfood project supplies the canonical storage origin. The private demo
+checks browser Origin against the serving request origin (including scheme and port),
+retains CSRF protection, and presents comment URLs at that serving origin. This permits
+local address aliases without weakening customer projects’ exact-origin boundary. Each anonymous visitor
 gets a distinct workspace, project and reviewer on their first successful comment, in
 one transaction. Failed comments and page views create no account records. Reusing the
 existing project boundary keeps public demo isolation independent of reviewer filters;

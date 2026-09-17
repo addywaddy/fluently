@@ -45,7 +45,7 @@ defmodule FluentlyWeb.DemoTest do
     assert Repo.aggregate(Account, :count) == 0
     conn = conn |> next() |> post("/demo/comments", attrs())
     result = json_response(conn, 201)["data"]
-    assert result["page"] == "https://example.com/"
+    assert result["page"] == "http://www.example.com/"
     assert hd(result["messages"])["author"]["kind"] == "anonymous"
     assert Repo.aggregate(Account, :count) == 1
     account = Accounts.current(get_session(conn, :account_token))
@@ -299,5 +299,46 @@ defmodule FluentlyWeb.DemoTest do
     account = Accounts.current(get_session(saved, :account_token))
     assert {:ok, _} = Threads.delete(Accounts.demo_project(account), thread["id"])
     assert saved |> next() |> get(path) |> json_response(404)
+  end
+
+  test "same-origin demo works on an alternate app address, including snapshots and reload" do
+    conn = %{visitor() | host: "127.0.0.1", port: 4000}
+    conn = put_req_header(conn, "origin", "http://127.0.0.1:4000")
+    saved = post(conn, "/demo/comments", attrs())
+    thread = json_response(saved, 201)["data"]
+    assert thread["page"] == "http://127.0.0.1:4000/"
+    account = Accounts.current(get_session(saved, :account_token))
+
+    assert Threads.get(Accounts.demo_project(account), thread["id"]).page ==
+             "https://example.com/"
+
+    reloaded =
+      saved
+      |> next_alias()
+      |> get("/demo/comments?page=http%3A%2F%2F127.0.0.1%3A4000%2F")
+      |> json_response(200)
+
+    assert [found] = reloaded["data"]
+    assert found["id"] == thread["id"]
+    assert found["page"] == thread["page"]
+    path = "/demo/comments/#{thread["id"]}/snapshot"
+
+    assert saved
+           |> next_alias()
+           |> post(path, %{data_url: Fluently.FeedbackFixtures.snapshot()})
+           |> json_response(200)
+
+    assert saved |> next_alias() |> get(path) |> json_response(200)
+
+    assert saved
+           |> next_alias()
+           |> put_req_header("origin", "http://localhost:4000")
+           |> post("/demo/comments", attrs())
+           |> json_response(403)
+  end
+
+  defp next_alias(conn) do
+    %{next(conn) | host: "127.0.0.1", port: 4000}
+    |> put_req_header("origin", "http://127.0.0.1:4000")
   end
 end
