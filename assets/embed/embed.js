@@ -53,7 +53,7 @@ if (project && !document.querySelector('fluently-feedback')) {
     shadow.append(pins, outline, hint, bar, panel, live, menu)
     document.body.append(host)
     let armed = false, threads = [], page = pageURL(), draft = null, selected = null, filter = 'open', frame = null, loading = false
-    let panelMode = '', lastFocus = null, busy = false, countLabel = '', destroyed = false
+    let panelMode = '', lastFocus = null, busy = false, countLabel = '', destroyed = false, selectedAnchor = null
     let commenting = false, menuSnapshot = null, menuFocus = null, logoRotation = 0
     const announce = text => { live.textContent = text }
     const errorBox = () => { const node = el('p', '', 'error'); node.setAttribute('role', 'alert'); return node }
@@ -118,6 +118,7 @@ if (project && !document.querySelector('fluently-feedback')) {
       if (value) { closePanel(); announce('Choose an element. Press Escape to cancel.') }
     }
     function openPanel(title, mode) {
+      selectedAnchor = null; outline.hidden = true
       lastFocus = shadow.activeElement || document.activeElement
       panelMode = mode; panel.hidden = false; panel.replaceChildren()
       const heading = el('div', '', 'row')
@@ -125,7 +126,7 @@ if (project && !document.querySelector('fluently-feedback')) {
       heading.append(h, button('Close', () => mode === 'join' ? cleanup() : closePanel())); panel.append(heading)
       h.focus()
     }
-    function closePanel() { panel.hidden = true; panelMode = ''; draft = null; selected = null; if (lastFocus?.isConnected) lastFocus.focus({preventScroll:true}) }
+    function closePanel() { panel.hidden = true; panelMode = ''; draft = null; selected = null; selectedAnchor = null; if (lastFocus?.isConnected) lastFocus.focus({preventScroll:true}); outline.hidden = true }
     async function api(path, method = 'GET', data) {
       const base = demo ? `${service}/demo` : `${service}/api/projects/${encodeURIComponent(project)}`
       const response = await fetch(`${base}${path}`, {
@@ -201,6 +202,7 @@ if (project && !document.querySelector('fluently-feedback')) {
       }
       const label = `${matching.length} ${filter} · ${hidden} hidden in this view`
       if (countLabel !== label) { listButton.textContent = label; countLabel = label }
+      if (selectedAnchor) restoreOutline()
     }
     function schedule() { if (!frame && !destroyed) frame = requestAnimationFrame(() => {frame = null; position()}) }
     function renderPins() {
@@ -211,17 +213,19 @@ if (project && !document.querySelector('fluently-feedback')) {
           const grouped = pin.feedbackThreads || [thread]
           if (grouped.length === 1) { showThread(grouped[0]); return }
           setArmed(false); openPanel('Comments on this element', 'group')
+          selectedAnchor = grouped[0].anchor; restoreOutline()
           for (const item of grouped) panel.append(button(item.messages[0]?.body || 'Comment', () => showThread(item), 'thread'))
         }, 'pin')
         pin.setAttribute('aria-label', `Open comment ${i + 1}: ${thread.messages[0]?.body.slice(0, 60) || ''}`)
         const highlight = () => {
+          if (selectedAnchor) { restoreOutline(); return }
           const result = resolve(thread.anchor)
           if (result.state === 'resolved') outlineElement(result.element)
         }
         pin.addEventListener('pointerenter', highlight)
         pin.addEventListener('focus', highlight)
-        pin.addEventListener('pointerleave', () => { outline.hidden = true })
-        pin.addEventListener('blur', () => { outline.hidden = true })
+        pin.addEventListener('pointerleave', restoreOutline)
+        pin.addEventListener('blur', restoreOutline)
         pins.append(pin)
       })
       position()
@@ -272,6 +276,7 @@ if (project && !document.querySelector('fluently-feedback')) {
     }
     function showThread(thread) {
       setArmed(false); openPanel('Comment thread', 'thread'); selected = thread.id
+      selectedAnchor = thread.anchor; restoreOutline()
       for (const [index, message] of thread.messages.entries()) {
         const item = el('article', '', 'message')
         const time = el('time', new Date(message.created_at).toLocaleString()); time.dateTime = message.created_at
@@ -296,6 +301,7 @@ if (project && !document.querySelector('fluently-feedback')) {
     function confirmDeletion(thread, message, entireThread) {
       openPanel(entireThread ? 'Delete this thread?' : 'Delete this reply?', 'delete')
       selected = thread.id
+      selectedAnchor = thread.anchor; restoreOutline()
       panel.append(el('p', entireThread ? 'This permanently deletes the comment, all replies, and its pin. This cannot be undone.' : 'This permanently deletes your reply. The rest of the thread will remain. This cannot be undone.'))
       const error = errorBox()
       const cancel = button('Cancel', () => {
@@ -346,6 +352,7 @@ if (project && !document.querySelector('fluently-feedback')) {
     function beginDraft(snapshot) {
       const {anchor} = snapshot
       setArmed(false); openPanel('New comment', 'draft'); draft = snapshot
+      selectedAnchor = anchor; restoreOutline()
       panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
       if (demo) panel.append(el('p', 'Only you can see your demo comments. We remember you with a cookie. Sign up to keep them; unsaved demos expire after 14 days.', 'muted'))
       if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
@@ -378,7 +385,7 @@ if (project && !document.querySelector('fluently-feedback')) {
       menuAdd.focus({preventScroll: true})
     }
     function dismissContext(event) { if (!event.composedPath().includes(menu)) closeContext() }
-    function layoutChanged() { closeContext(); outline.hidden = true; schedule() }
+    function layoutChanged() { closeContext(); if (!selectedAnchor) outline.hidden = true; schedule() }
     function blur() { closeContext() }
     function blockHost(event) { if (armed && !event.composedPath().includes(host)) { event.stopImmediatePropagation(); event.preventDefault() } }
     function hover(event) {
@@ -387,7 +394,16 @@ if (project && !document.querySelector('fluently-feedback')) {
     }
     function outlineElement(element) {
       const rect = element.getBoundingClientRect()
-      outline.hidden = false; outline.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px`
+      const origin = host.getBoundingClientRect()
+      const {position} = placement(element, origin)
+      const left = rect.left - (position === 'absolute' ? origin.left : 0)
+      const top = rect.top - (position === 'absolute' ? origin.top : 0)
+      outline.hidden = false; outline.style.cssText = `position:${position};left:${left}px;top:${top}px;width:${rect.width}px;height:${rect.height}px`
+    }
+    function restoreOutline() {
+      const result = selectedAnchor && commenting ? resolve(selectedAnchor) : null
+      if (result?.state === 'resolved') outlineElement(result.element)
+      else outline.hidden = true
     }
     function keydown(event) {
       if (event.key !== 'Escape' || !commenting) return

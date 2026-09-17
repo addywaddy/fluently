@@ -20,7 +20,7 @@ test('document pin coordinates stay unchanged as the page scrolls', () => {
 
 test('accounts for a positioned body and horizontal scrolling', () => {
   const result = placement(target(200), {left: -40, top: -280})
-  assert.equal(result.left, 148)
+  assert.equal(result.left, 332)
   assert.equal(result.top, 488)
 })
 
@@ -45,14 +45,17 @@ test('nested scrolling updates the target offset within the document', () => {
 })
 
 
-test('changing element width or wrapping height does not move the corner badge', () => {
+test('resizing preserves the inset from the top-right corner', () => {
   const rect = {left: 100, top: 200, width: 900, height: 80}
   const element = {getBoundingClientRect: () => rect}
   const before = placement(element, {left: 0, top: 0})
   rect.width = 320
   rect.height = 160
-  assert.deepEqual(placement(element, {left: 0, top: 0}), before)
-  assert.equal(before.left, 108)
+  const after = placement(element, {left: 0, top: 0})
+  assert.equal(100 + 900 - before.left, 8)
+  assert.equal(rect.left + rect.width - after.left, 8)
+  assert.equal(after.top, before.top)
+  assert.equal(before.left, 992)
   assert.equal(before.top, 208)
 })
 

@@ -9,7 +9,7 @@ export function placement(element, origin) {
   const rect = element.getBoundingClientRect()
   // The badge identifies the element, not a word or a percentage of its box.
   // Keep the original click point in the anchor as context, not display geometry.
-  const x = rect.left + Math.min(8, rect.width / 2)
+  const x = rect.left + rect.width - Math.min(8, rect.width / 2)
   const y = rect.top + Math.min(8, rect.height / 2)
   return {
     position: fixed ? 'fixed' : 'absolute',
