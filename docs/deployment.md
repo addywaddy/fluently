@@ -71,9 +71,9 @@ References: [Kamal configuration](https://kamal-deploy.org/docs/configuration/ov
 
 ## Error reporting (Sentry)
 
-Production uses the configured Fluently Sentry project in the EU region. `SENTRY_DSN`
+Production uses the Fluently Sentry DSN committed in `config/prod.exs` (EU region). `SENTRY_DSN`
 can override the supplied project DSN; the DSN is an ingestion identifier, not an account
-API token. Kamal passes it to the application. Development has no DSN and tests collect
+API token. Kamal passes an override only when explicitly set. Development has no DSN and tests collect
 reports locally. No Sentry auth token is needed for source packaging or event ingestion.
 
 `Sentry.PlugCapture` wraps the Phoenix endpoint, `Sentry.PlugContext` runs after parsers,

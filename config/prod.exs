@@ -34,7 +34,9 @@ config :logger, level: :info
 config :fluently, :secure_cookies, true
 
 config :sentry,
-  environment_name: :prod,
+  dsn:
+    "https://3ca39bb375e4a3567447790e24c574c4@o4508133464997888.ingest.de.sentry.io/4512102985957456",
+  environment_name: Mix.env(),
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()],
   source_code_path_pattern: "lib/**/*.ex"

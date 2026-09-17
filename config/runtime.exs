@@ -41,11 +41,11 @@ if config_env() == :dev do
 end
 
 if config_env() == :prod do
-  config :sentry,
-    dsn:
-      System.get_env("SENTRY_DSN") ||
-        "https://3ca39bb375e4a3567447790e24c574c4@o4508133464997888.ingest.de.sentry.io/4512102985957456",
-    release: System.get_env("KAMAL_VERSION") || System.get_env("SENTRY_RELEASE")
+  if dsn = System.get_env("SENTRY_DSN") do
+    config :sentry, dsn: dsn
+  end
+
+  config :sentry, release: System.get_env("KAMAL_VERSION") || System.get_env("SENTRY_RELEASE")
 
   database_path = System.fetch_env!("DATABASE_PATH")
 
