@@ -1,0 +1,32 @@
+<main class="manage">
+  <header>
+    <a href="/">Fluently</a><.form for={@form} action={~p"/app/logout"} id="logout">
+      <button class="button">Sign out</button>
+    </.form>
+  </header>
+  <h1>{@workspace.name}</h1>
+  <h2>Projects</h2>
+  <p :if={@projects == []}>Create a project to start collecting feedback on your website.</p>
+  <article :for={project <- @projects} class="manage-card">
+    <a href={~p"/app/projects/#{project.id}"}>{project.name}</a><p>{project.origin}</p>
+  </article>
+  <h2>Create project</h2>
+  <p :if={@error} role="alert">{@error}</p>
+  <.form for={@form} action={~p"/app/projects"} id="new-project">
+    <.input
+      field={@form[:name]}
+      label="Project name"
+      required
+      maxlength="100"
+      class="manage-input"
+    />
+    <.input
+      field={@form[:origin]}
+      label="Website origin"
+      placeholder="https://staging.example.com"
+      required
+      class="manage-input"
+    />
+    <button class="button button-primary">Create project</button>
+  </.form>
+</main>

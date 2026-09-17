@@ -1,0 +1,19 @@
+<main class="manage">
+  <a class="wordmark" href="/">Fluently</a>
+  <h1>Your workspace</h1>
+  <p>
+    Pilot access is invitation-only. Enter the owner key supplied when your workspace was created.
+  </p>
+  <p :if={@error} role="alert">{@error}</p>
+  <.form for={@form} action={~p"/app/login"} id="owner-login">
+    <.input
+      field={@form[:key]}
+      type="password"
+      label="Owner key"
+      required
+      class="manage-input"
+      autocomplete="current-password"
+    />
+    <button class="button button-primary">Sign in</button>
+  </.form>
+</main>

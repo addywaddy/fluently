@@ -1,0 +1,68 @@
+<main class="manage">
+  <a href={~p"/app"}>← Projects</a>
+  <h1>{@project.name}</h1><p>{@project.origin}</p>
+  <h2>1. Install the snippet</h2>
+  <p>Add this to your website. The project ID is public and does not grant access.</p>
+  <pre>{"<script defer src=\"#{@service_url}/embed.js\" data-project=\"#{@project.id}\"></script>"}</pre>
+  <h2>2. Invite reviewers</h2>
+  <%= if @credentials do %>
+    <p>
+      Save these credentials now. They are shown only once. Anyone with the review link can read, comment and resolve threads in this project until {Calendar.strftime(
+        @project.review_expires_at,
+        "%Y-%m-%d %H:%M UTC"
+      )}.
+    </p>
+    <p>
+      <a
+        href={@project.origin <> "/#fluently=" <> @credentials.review}
+        rel="noreferrer"
+        target="_blank"
+      >Open review link ↗</a>
+    </p>
+    <pre>{@project.origin <> "/#fluently=" <> @credentials.review}</pre>
+    <h3>Read-only API key</h3><p>Keep this server-side. Do not put it in your website snippet.</p><pre>{@credentials.api}</pre>
+  <% else %>
+    <p>
+      Use your saved review link, or rotate credentials below to issue a new link and API key.
+    </p>
+  <% end %>
+  <p>
+    Guests enter a display name. Sessions last up to 24 hours; review links expire after 14 days. To review a specific page, keep the fragment and replace the path before it.
+  </p>
+  <.form for={@form} action={~p"/app/projects/#{@project.id}/rotate"} id="rotate-credentials">
+    <button class="button">Rotate keys and revoke all review sessions</button>
+  </.form>
+  <h2>Feedback</h2>
+  <p :if={@threads == []}>
+    No feedback yet. Install the snippet, open the review link and pin your first comment.
+  </p>
+  <article :for={thread <- @threads} class="manage-card">
+    <strong>{thread.status}</strong>
+    · {thread.page}
+    <p :for={message <- thread.messages}>
+      <strong>{message.reviewer.name}:</strong> {message.body}
+    </p>
+    <details>
+      <summary>Structured context</summary><pre>{Jason.encode!(%{anchor: thread.anchor, context: thread.context}, pretty: true)}</pre>
+    </details>
+    <.form
+      for={@form}
+      action={~p"/app/projects/#{@project.id}/threads/#{thread.id}/delete"}
+      id={"delete-thread-#{thread.id}"}
+    >
+      <button class="button">Delete thread permanently</button>
+    </.form>
+  </article>
+  <h2>Delete project</h2><p>
+    Deletes all project feedback and reviewers permanently. Type “delete” to confirm.
+  </p>
+  <.form for={@form} action={~p"/app/projects/#{@project.id}/delete"} id="delete-project">
+    <.input
+      field={@form[:confirm]}
+      label="Confirmation"
+      required
+      pattern="delete"
+      class="manage-input"
+    /><button class="button">Delete project</button>
+  </.form>
+</main>

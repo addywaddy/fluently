@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Acme checkout — SDK integration fixture</title>
+  <style>
+    body { font: 17px/1.6 system-ui; margin: 40px auto; max-width: 900px; padding: 20px; background: #f5f0e8; color: #382e25; }
+    button { font: inherit; background: #8d452c; color: white; border: 0; padding: 12px 20px; border-radius: 0; cursor: pointer; }
+    nav { display: flex; gap: 30px; margin-bottom: 40px; }
+    a { color: #8d452c; } article { background: white; padding: 30px; margin: 30px 0; }
+    .mobile { display: none; } #spacer { height: 0; } #spacer.expanded { height: 160px; }
+    @media(max-width:600px) { .desktop {display:none} .mobile {display:block} body {margin:0} }
+  </style>
+</head>
+<body>
+  <nav class="desktop"><a href="#pricing" data-feedback-id="pricing-link">Pricing</a><a href="#checkout">Checkout</a></nav>
+  <details class="mobile"><summary>Menu</summary><a href="#pricing" data-feedback-id="pricing-link">Pricing</a></details>
+  <h1 id="headline">A better checkout</h1>
+  <p>These are host styles and controls, deliberately different from the embedded feedback UI.</p>
+  <button id="shift">Shift layout</button>
+  <div id="spacer"></div>
+  <article id="checkout">
+    <h2>Your order</h2>
+    <p data-feedback-id="price">Total: €29.00</p>
+    <button id="checkout-button" data-feedback-id="checkout-button">Submit</button>
+    <output id="host-result">No orders submitted</output>
+  </article>
+  <section data-feedback-exclude><h2>Private account area</h2><p>Do not capture this text.</p><input aria-label="Private field" value="fixture-sensitive-value"></section>
+  <p>A plain paragraph without an ID for semantic anchor testing.</p>
+  <button id="navigate">SPA: next page</button>
+  <script>
+    let clicks = 0;
+    document.getElementById('checkout-button').addEventListener('click', () => document.getElementById('host-result').textContent = `${++clicks} orders submitted`);
+    document.getElementById('shift').addEventListener('click', () => document.getElementById('spacer').classList.toggle('expanded'));
+    document.getElementById('navigate').addEventListener('click', () => history.pushState({}, '', '/next'));
+  </script>
+  <script defer src="http://localhost:4000/embed.js" data-project="__PROJECT_ID__"></script>
+</body>
+</html>

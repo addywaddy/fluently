@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title default="Fluently — Feedback an agent can act on" phx-no-format>{assigns[:page_title]}</.live_title>
+    <meta
+      name="description"
+      content="Pin feedback to the actual element. Give people and agents the context to find the same spot and fix it."
+    />
+    <link rel="icon" type="image/svg+xml" href={~p"/images/fluently.svg"} />
+    <link phx-track-static rel="stylesheet" href={~p"/css/app.css"} />
+  </head>
+  <body>
+    {@inner_content}
+    <script
+      :if={assigns[:feedback_project]}
+      id="fluently-embed"
+      defer
+      src={~p"/embed.js"}
+      data-project={assigns[:feedback_project]}
+    >
+    </script>
+  </body>
+</html>

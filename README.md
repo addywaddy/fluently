@@ -1,0 +1,114 @@
+# Fluently
+
+Figma-style conversations on real websites, with structured context for people and agents.
+Phoenix/PostgreSQL monolith, plain CSS management UI, and a standalone ~15 KB JavaScript embed.
+The landing page remains HTML/CSS only. The original `designs/` files are unchanged.
+
+## Local development
+
+Requires Elixir 1.17+ / compatible OTP, PostgreSQL, and Node 22+ for SDK tests only.
+This build was checked with Elixir 1.20.2 / OTP 29. Configure database credentials in
+`config/dev.exs` and `config/test.exs` (defaults: postgres/postgres on localhost).
+
+```sh
+mix setup
+mix fluently.workspace "My studio"
+mix phx.server
+```
+
+Save the printed **owner key** and sign in at http://localhost:4000/app/login.
+Pilot owners are provisioned by an operator; there is no public registration or email dependency.
+Owner keys are bearer credentials: keep them in a password manager, not in the embed.
+
+Run `mix precommit` and `node --test test/embed/*.test.mjs` for checks.
+Run `mix assets.build` after editing `assets/embed/`; the normal development watcher watches app.js only.
+
+## Create a project and install
+
+1. Create a project in `/app`, supplying its exact origin (e.g. `https://staging.example.com`, no trailing slash). HTTP is permitted for localhost testing only.
+2. Copy the snippet onto that website:
+
+```html
+<script defer src="https://feedback.example.com/embed.js" data-project="PUBLIC_PROJECT_UUID"></script>
+```
+
+3. Save the **review link** and **read-only API key** shown once after creation. They are distinct from the public project UUID.
+4. Send reviewers the review link. Its fragment contains an unguessable invitation, removed by the SDK before it makes API requests. It expires after 14 days. Change the path before the fragment to review a particular page.
+5. Reviewers choose a display name, click **Add comment**, select an element, and post. Click a numbered pin to reply or resolve. The thread list includes hidden targets and a resolved filter.
+
+Guests share project-wide review access; there are no individual guest roles in V1. Signed review sessions last 24 hours and persist in sessionStorage for that tab. **Exit** clears the local session. Rotating project keys revokes all existing invitations/sessions and the old API key. Owner sessions last 12 hours.
+
+No invitation/session means no widget or feedback requests. Merely viewing the public snippet gives no read/write access. The host website must be trusted: its scripts can access same-page session storage. The SDK does not bypass host-site authentication.
+
+## Dogfooding on Fluently
+
+Create a project for the Fluently service origin itself (locally `http://localhost:4000`).
+Set `FLUENTLY_PROJECT_ID` to that public project UUID and restart the service. Only the
+landing route includes the embed; login and project-management screens do not.
+Use the project’s private review link to start commenting. Ordinary visitors see no widget.
+
+For local development, keep the public ID in an ignored `.env.local`:
+
+```sh
+# .env.local contains: FLUENTLY_PROJECT_ID=your-project-uuid
+set -a
+. ./.env.local
+set +a
+mix phx.server
+```
+
+In production, create a new project for the real HTTPS origin and set the same environment
+variable through your host. Do not put review or API secrets in this setting.
+
+## Anchors and privacy
+
+Use stable semantic IDs for the best results:
+
+```html
+<button data-feedback-id="checkout-continue">Continue</button>
+<section data-feedback-exclude>Private information</section>
+```
+
+Desktop and mobile equivalents may share a feedback ID. Exactly one visible match is required.
+Hidden, missing, ambiguous, excluded, and offscreen targets have no visible pin; their threads remain in the list. A DOM selector is stored as a fallback, never absolute page coordinates. Avoid recycled DOM IDs for different records.
+
+The embed records a versioned `web/dom` anchor, relative point, viewport, scroll position, browser family, page origin/path, guest identity and messages. Query strings and fragments are dropped. If there is no stable ID, it captures at most 160 characters of the selected target’s text and ARIA label for conservative matching. Set `data-capture-text="false"` on the script to disable that fallback; use explicit IDs in that mode.
+
+No screenshots, form values, cookies, storage contents, DOM dumps or full user-agent strings are collected. Form controls, editable areas, excluded ancestors and containers with sensitive descendants are not selectable. Paths, IDs, selected text and reviewer-written comments may still contain personal data: mark sensitive areas and avoid secrets in feedback. The server validates and allowlists context fields. Owners can delete individual threads or whole projects (including reviewers). Retention is manual in V1; deletion is not backup erasure.
+
+Shadow DOM prevents normal CSS collisions. Only feedback mode intercepts host selection events. The widget polls every 15 seconds and notices pathname changes without patching history APIs. Query-driven/hash-driven page states share the same page; cross-origin iframes, closed shadow roots and canvas internals are not supported. Host CSP must permit `script-src` and `connect-src` to the service, and the widget’s inline styles (or a `style-src` nonce matching `data-style-nonce` on the snippet). See architecture notes before using on sensitive websites.
+
+## API
+
+Project API keys are read-only and intended for server-side tools:
+
+```sh
+curl -H "Authorization: Bearer $FLUENTLY_API_KEY" \
+  'https://feedback.example.com/api/projects/PROJECT_UUID/comments?status=open'
+```
+
+- `GET /api/projects/:id/comments?status=open&page=ENCODED_ORIGIN_AND_PATH&offset=0`
+- `GET /api/projects/:id/comments/:thread_id`
+- `POST /api/projects/:id/sessions` — `{token: REVIEW_INVITATION, name: DISPLAY_NAME}` → signed review token.
+- `POST /api/projects/:id/comments` — review session required; `{body, page, anchor, context}`.
+- `POST /api/projects/:id/comments/:thread_id/replies` — review session; `{body}`.
+- `PATCH /api/projects/:id/comments/:thread_id` — review session; `{status: "open" | "resolved"}`.
+
+Use `Authorization: Bearer …` for both read keys and signed review sessions. Lists return
+`{data: [...], next_offset: number | null}` in creation order, 100 threads per page.
+Each thread includes IDs, page, status, timestamps, versioned anchor/context and messages with author ID/name/kind.
+Errors return `{error: {message}}` with 401/403/404/422/429. The embed displays up to 1,000 threads per page;
+the API is paginated. See `test/support/feedback_fixtures.ex` for a complete create payload.
+
+## Architecture and deployment
+
+`Fluently.Feedback` owns workspace/project credentials and reviewer sessions;
+`Fluently.Threads` owns scoped conversations; `Fluently.Feedback.Anchor` validates context.
+`assets/embed/anchor.mjs` handles DOM capture/resolution independently of widget UI.
+No MCP, screenshots, billing or agent execution is included. Decisions: [docs/architecture.md](docs/architecture.md).
+Release instructions: [docs/deployment.md](docs/deployment.md). Use a single app instance for the pilot’s in-memory rate limiter.
+
+A separate-origin test host is in `test/fixtures/host/index.html`. Copy it to a temporary directory,
+replace `__PROJECT_ID__` with a project configured for `http://localhost:4100`, then serve that directory
+with `python3 -m http.server 4100 --bind 127.0.0.1 --directory PATH`. Open its review link to test
+reloads, layout shifts, the responsive menu, excluded areas and SPA pathname changes.

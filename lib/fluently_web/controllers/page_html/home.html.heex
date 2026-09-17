@@ -1,0 +1,162 @@
+<div class="landing" id="top">
+  <a class="skip-link" href="#welcome">Skip to content</a>
+  <header class="site-header container">
+    <a class="wordmark" href="#top" aria-label="Fluently home">
+      <img src={~p"/images/fluently.svg"} width="40" height="40" alt="" />
+      <span>Fluently</span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="#problem">Problem</a>
+      <a href="#anchoring">Anchoring</a>
+      <a href="#loop">The loop</a>
+      <a class="button button-small" href="#preview">See how it works
+      <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="welcome" class="container">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="eyebrow">
+        <span class="status-dot"></span> A little less explaining. A lot more building.
+      </div>
+      <h1 id="hero-title" data-feedback-id="landing-hero-title">
+        Feedback an agent<br class="desktop-break" /> can <span>act on.</span>
+      </h1>
+      <p class="hero-description" data-feedback-id="landing-hero-description">
+        Pin a comment to the actual element, on the actual page. Give people and agents the context to find the same spot — and fix it.
+      </p>
+      <div class="hero-actions" data-feedback-id="landing-hero-actions">
+        <a class="button button-primary" href="#preview">See feedback in context
+        <span aria-hidden="true">↗</span></a>
+        <a class="text-link" href="#loop">See how it works <span aria-hidden="true">↓</span></a>
+      </div>
+      <p class="hero-note">For the people who see it. And the agents who fix it.</p>
+
+      <div class="demo" id="preview" aria-labelledby="demo-title">
+        <div class="demo-bar">
+          <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>your-product.com
+          <span class="demo-path">/ a little context goes a long way</span></span><span class="demo-live"><span class="status-dot"></span>
+          In context</span>
+        </div>
+        <div class="demo-content">
+          <div class="demo-page">
+            <span class="section-label">RIGHT HERE. NOT LOST IN A THREAD.</span>
+            <h2 id="demo-title">Great work starts<br />with a clear point.</h2>
+            <p>
+              A headline, a button, that thing that feels a little off. Point to it. Say what you mean.
+            </p>
+            <a class="button" href="#anchoring">Every detail, attached
+            <span aria-hidden="true">↗</span></a>
+          </div>
+          <div class="sample-thread" aria-label="Example feedback thread">
+            <div class="sample-pin" aria-hidden="true">1</div>
+            <div class="thread-heading">
+              <span class="avatar">J</span><div>
+                <strong>Jamie</strong><span>Just now · Guest reviewer</span>
+              </div><span class="open-tag">Open</span>
+            </div>
+            <p>
+              Could we make this headline more specific? Lead with what the customer can actually do.
+            </p>
+            <div class="context-tags"><span>↳ h2#demo-title</span><span>1440 × 900</span></div>
+            <div class="thread-footer">
+              <span class="status-dot"></span> The right feedback. The exact element.
+            </div>
+          </div>
+        </div>
+        <div class="demo-bottom">
+          <span>A comment. An anchor. The context to act.</span><span>Illustrative product preview</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section problem-section" id="problem" aria-labelledby="problem-title">
+      <div class="section-intro">
+        <span class="section-label">THE CONTEXT GAP</span><h2 id="problem-title">
+          “Can we fix this?”<br /><span>Shouldn’t start a guessing game.</span>
+        </h2><p>
+          Feedback loses context between tools. And an agent inherits the same missing pieces.
+        </p>
+      </div>
+      <div class="problem-grid">
+        <article>
+          <span class="card-label">01 / THE REVIEWER</span><h3>Sees the problem.</h3><p>
+            A specific element, on a real page, in a particular state. Obvious while they’re looking at it.
+          </p><div class="quote">“This needs a little more breathing room.”</div>
+        </article>
+        <article>
+          <span class="card-label">02 / THE BUILDER</span><h3>Reconstructs the scene.</h3><p>
+            Which URL? Which breakpoint? Which version? And what did “this” actually mean?
+          </p><div class="quote">“Wait — which part are we talking about?”</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="anchoring" aria-labelledby="anchoring-title">
+      <div class="section-intro">
+        <span class="section-label">LESS GUESSWORK. MORE CONTEXT.</span><h2 id="anchoring-title">
+          Attached to the product.<br /><span>Not just a conversation.</span>
+        </h2>
+      </div>
+      <div class="feature-grid">
+        <article>
+          <span class="feature-number">01</span><h3>Find the element.</h3><p>
+            Start with a stable anchor. Keep the page, viewport, and surrounding context together, so the next person knows where to look.
+          </p>
+        </article>
+        <article>
+          <span class="feature-number">02</span><h3>Respect the layout.</h3><p>
+            Feedback belongs to an element, not a pair of coordinates. As the page moves, the conversation moves with it.
+          </p>
+        </article>
+        <article>
+          <span class="feature-number">03</span><h3>Keep the thread.</h3><p>
+            One place for the observation and the follow-through. Less copying between tools. Fewer details lost along the way.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="loop" aria-labelledby="loop-title">
+      <div class="loop-heading">
+        <div>
+          <span class="section-label">THE FEEDBACK LOOP</span><h2 id="loop-title">
+            People point.<br /><span>Agents pick up the context.</span>
+          </h2>
+        </div><p>
+          From “this feels off” to a change you can verify.<br />A shared loop, with a human at both ends.
+        </p>
+      </div>
+      <ol class="workflow">
+        <li><span>01</span>Human points</li>
+        <li><span>02</span>Feedback carries context</li>
+        <li class="workflow-highlight"><span>03</span>Agent reasons</li>
+        <li><span>04</span>Fix opens a PR</li>
+        <li><span>05</span>Human verifies</li>
+      </ol>
+      <p class="workflow-note">
+        One conversation, from the first observation to the final review.
+      </p>
+    </section>
+
+    <section class="closing" aria-labelledby="closing-title">
+      <span class="section-label">LESS BACK-AND-FORTH. MORE FORWARD.</span>
+      <h2 id="closing-title">Good feedback<br />has a <span>place.</span></h2>
+      <p>Make it the actual product.</p>
+      <a class="button button-primary" href="#preview">See feedback in context
+      <span aria-hidden="true">↗</span></a>
+      <span class="closing-note">Attached to the actual product.</span>
+    </section>
+  </main>
+
+  <footer class="site-footer container">
+    <a class="wordmark" href="#top"><img
+      src={~p"/images/fluently.svg"}
+      width="24"
+      height="24"
+      alt=""
+    /><span>Fluently</span></a>
+    <span>A feedback layer for the agentic web.</span>
+    <a href="#top">Back to top <span aria-hidden="true">↑</span></a>
+  </footer>
+</div>
