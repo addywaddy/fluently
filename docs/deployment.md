@@ -7,7 +7,7 @@ verification requires a deployed host and bucket credentials.
 ## GitHub Actions deployment
 
 Pushes to `main` run lint/tests and a production Docker build, then deploy with
-Kamal 2.12.0 from GitHub's runner. Pull requests never deploy. A manual run of the CI
+Kamal 2.10.1 from GitHub's runner. Pull requests never deploy. A manual run of the CI
 workflow on `main` also deploys. Deployments are serialized and are not cancelled by
 new pushes. The `production` environment groups deployment history.
 
@@ -21,7 +21,8 @@ access restricted. Runtime secrets are passed through the ignored Kamal secrets 
 
 The workflow prepares only `fluently_data`, deploys the app, starts the Fluently
 Litestream accessory if absent, and checks public HTTPS health. It builds on the
-runner, not the shared production VPS. Existing Chronologs containers/volumes are
+runner, not the shared production VPS. Kamal is pinned to Chronologs’ 2.10.1
+for compatibility with the shared v0.9.0 proxy; coordinate upgrades across both apps. Existing Chronologs containers/volumes are
 separate. Accessory configuration changes still require a deliberate
 `kamal accessory reboot litestream`; ordinary deploys preserve the running accessory.
 Set repository variable `FLUENTLY_PROJECT_ID` after provisioning the production
@@ -29,8 +30,8 @@ landing demo project. No local customer/demo database is uploaded.
 
 ## Kamal (recommended)
 
-The repository includes `config/deploy.yml` for **Kamal 2.12+** and the existing Phoenix
-Docker release. Install Kamal on your workstation (`gem install kamal -v 2.12.0`);
+The repository includes `config/deploy.yml` for **Kamal 2.10.1** and the existing Phoenix
+Docker release. Install Kamal on your workstation (`gem install kamal -v 2.10.1`);
 Ruby is only a deployment tool dependency. Docker must be running locally to build.
 
 The [Terraform configuration](../terraform/README.md) manages only the private backup

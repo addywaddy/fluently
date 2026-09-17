@@ -96,7 +96,7 @@ jobs:
         with:
           ruby-version: '3.4'
       - name: Install Kamal
-        run: gem install kamal -v 2.12.0 --no-document && gem install ed25519 bcrypt_pbkdf --no-document
+        run: gem install kamal -v 2.10.1 --no-document && gem install ed25519 bcrypt_pbkdf --no-document
       - name: Configure deployment SSH and secrets
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}

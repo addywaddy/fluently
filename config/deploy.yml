@@ -1,7 +1,7 @@
-# Kamal 2.12+. Export deployment settings in your shell; secrets are read separately.
+# Kamal 2.10.1. Export deployment settings in your shell; secrets are read separately.
 service: fluently
 image: <%= ENV.fetch("FLUENTLY_IMAGE").to_json %>
-minimum_version: 2.12.0
+minimum_version: 2.10.1
 
 servers:
   web:
