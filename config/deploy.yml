@@ -69,7 +69,7 @@ accessories:
       - config/litestream.yml:/etc/litestream.yml
     env:
       clear:
-        LITESTREAM_BUCKET: <%= ENV.fetch("LITESTREAM_BUCKET").to_json %>
+        LITESTREAM_BUCKET: <%= ENV.fetch("LITESTREAM_BUCKET", "fluently-backups").to_json %>
       secret:
         - LITESTREAM_ACCESS_KEY_ID
         - LITESTREAM_SECRET_ACCESS_KEY

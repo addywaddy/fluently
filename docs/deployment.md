@@ -10,8 +10,9 @@ The repository includes `config/deploy.yml` for **Kamal 2.12+** and the existing
 Docker release. Install Kamal on your workstation (`gem install kamal -v 2.12.0`);
 Ruby is only a deployment tool dependency. Docker must be running locally to build.
 
-The [Terraform configuration](../terraform/README.md) can provision the Hetzner VPS
-and private backup bucket; its plan must be reviewed before a separately authorized apply.
+The [Terraform configuration](../terraform/README.md) manages only the private backup
+bucket, already provisioned as `fluently-backups` in nbg1. Reuse the existing Chronologs
+VPS; Terraform does not manage that server.
 
 Prepare one Linux server with SSH access, ports 80/443 available, and your domain's DNS
 pointing to it. Default architecture is amd64; set `FLUENTLY_ARCH=arm64` for an ARM server.
@@ -23,7 +24,7 @@ export FLUENTLY_SERVER=your-server-ip
 export PHX_HOST=feedback.your-domain.com
 export FLUENTLY_IMAGE=your-registry-user/fluently
 export KAMAL_REGISTRY_USERNAME=your-registry-user
-export LITESTREAM_BUCKET=your-dedicated-fluently-backup-bucket
+export LITESTREAM_BUCKET=fluently-backups # optional: this is the Kamal default
 export MAIL_FROM=hello@fluently.now # optional: this is the Kamal default
 # Optional: KAMAL_REGISTRY_SERVER, FLUENTLY_ARCH, FLUENTLY_SSH_USER (default root)
 cp .kamal/secrets.example .kamal/secrets
@@ -46,7 +47,7 @@ kamal app logs
 
 Kamal builds from committed files: commit changes before deploying. `kamal config`
 validates the configuration locally, but can display secrets; do not share its output.
-No server has been contacted or provisioned by this repository setup.
+Terraform has provisioned the backup bucket; it has not provisioned or changed the VPS.
 
 Kamal mounts **`fluently_data:/data`**, runs migrations before Phoenix starts, and checks
 `/up` before switching traffic. The volume preparation above sets writable `/data` permissions for both containers. Keep this volume across deployments; do not delete it or scale this config
@@ -112,8 +113,9 @@ Reference: [Resend Swoosh adapter](https://swoosh.hexdocs.pm/Swoosh.Adapters.Res
 
 ## Litestream backups
 
-Create a **dedicated private bucket in Hetzner's nbg1 region**, then export its name as
-`LITESTREAM_BUCKET`. Provide `LITESTREAM_ACCESS_KEY_ID` and
+The dedicated private **`fluently-backups` bucket in Hetzner's nbg1 region** is
+provisioned with Terraform and is the Kamal default. Override `LITESTREAM_BUCKET`
+only when using a different bucket. Provide `LITESTREAM_ACCESS_KEY_ID` and
 `LITESTREAM_SECRET_ACCESS_KEY` in your shell/password manager or ignored `.kamal/secrets`.
 Use credentials authorized to list/read/write/delete backup objects in that bucket.
 Do not reuse Chronologs' bucket/path combination. No credentials were copied from it.

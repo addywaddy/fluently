@@ -1,6 +1,2 @@
-# Copy to terraform.tfvars only if overriding defaults. Never put credentials here.
-ssh_key_name       = "adam@chronologs"
-server_type        = "cpx22"
+# Optional bucket-name override. Never put credentials here.
 backup_bucket_name = "fluently-backups"
-# Restrict to your actual admin/VPN networks if available:
-# ssh_source_cidrs = ["YOUR_PUBLIC_IP/32"]
