@@ -15,7 +15,9 @@
 
 ## Personal landing demo and account upgrade
 
-The configured dogfood project supplies the canonical storage origin. The private demo
+No template project or configured project ID is required. The landing demo defaults
+to enabled in every environment, with a `FLUENTLY_DEMO_ENABLED=false` opt-out. New
+private projects use the serving request origin; existing project origins are preserved. The private demo
 checks browser Origin against the serving request origin (including scheme and port),
 retains CSRF protection, and presents comment URLs at that serving origin. This permits
 local address aliases without weakening customer projects’ exact-origin boundary. Each anonymous visitor

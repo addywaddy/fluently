@@ -15,11 +15,10 @@
   <body>
     {@inner_content}
     <script
-      :if={assigns[:feedback_project]}
+      :if={assigns[:feedback_demo]}
       id="fluently-embed"
       defer
       src={~p"/embed.js"}
-      data-project={assigns[:feedback_project]}
       data-demo="true"
     >
     </script>

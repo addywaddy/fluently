@@ -25,8 +25,8 @@ runner, not the shared production VPS. Kamal is pinned to Chronologs’ 2.10.1
 for compatibility with the shared v0.9.0 proxy; coordinate upgrades across both apps. Existing Chronologs containers/volumes are
 separate. Accessory configuration changes still require a deliberate
 `kamal accessory reboot litestream`; ordinary deploys preserve the running accessory.
-Set repository variable `FLUENTLY_PROJECT_ID` after provisioning the production
-landing demo project. No local customer/demo database is uploaded.
+The landing demo is enabled by default, with no template project or repository variable.
+No local customer/demo database is uploaded.
 
 ## Kamal (recommended)
 
@@ -85,9 +85,8 @@ backward-compatible migrations. For an incompatible migration, stop the app firs
 that container from becoming healthy. `kamal rollback VERSION` rolls back the application
 image only; it does not undo migrations or restore deleted data.
 
-After initial deployment, sign up and create projects through `/app`. To enable the
-landing demo, create a project for the production HTTPS origin, export its public UUID
-as `FLUENTLY_PROJECT_ID`, and deploy again. Local demo data is not uploaded automatically.
+After initial deployment, sign up and create customer projects through `/app`. The
+landing demo works immediately; `FLUENTLY_DEMO_ENABLED=false` disables it. Local demo data is not uploaded automatically.
 See the backup setup and restore procedure below.
 
 References: [Kamal configuration](https://kamal-deploy.org/docs/configuration/overview/),
@@ -221,7 +220,7 @@ Supply through your host's secret store or an ignored `.env` file:
 - Optional `DATABASE_PATH`: absolute path on persistent local storage (required for native releases).
 - `PORT`: default 4000.
 - `POOL_SIZE`: default 5.
-- `FLUENTLY_PROJECT_ID`: optional public project UUID for the landing demo.
+- `FLUENTLY_DEMO_ENABLED`: defaults to `true`; set `false` to disable the landing demo.
 
 ## Initialize and run
 

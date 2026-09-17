@@ -123,5 +123,5 @@ if config_env() == :prod do
   config :fluently, :mail_from, {"Fluently", System.fetch_env!("MAIL_FROM")}
 end
 
-# Optional self-installation; the public project ID never grants review access.
-config :fluently, :dogfood_project_id, System.get_env("FLUENTLY_PROJECT_ID")
+# Private landing demos work without provisioning a template project.
+config :fluently, :demo_enabled, System.get_env("FLUENTLY_DEMO_ENABLED", "true") == "true"

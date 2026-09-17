@@ -2,20 +2,19 @@ defmodule FluentlyWeb.DogfoodTest do
   use FluentlyWeb.ConnCase, async: false
 
   setup do
-    previous = Application.get_env(:fluently, :dogfood_project_id)
-    on_exit(fn -> Application.put_env(:fluently, :dogfood_project_id, previous) end)
+    previous = Application.get_env(:fluently, :demo_enabled)
+    on_exit(fn -> Application.put_env(:fluently, :demo_enabled, previous) end)
     :ok
   end
 
-  test "the configured landing embed contains only the public project ID" do
-    id = Ecto.UUID.generate()
-    Application.put_env(:fluently, :dogfood_project_id, id)
+  test "the landing embed needs no project ID" do
+    Application.put_env(:fluently, :demo_enabled, true)
     document = build_conn() |> get("/") |> html_response(200) |> LazyHTML.from_document()
 
     assert Enum.any?(
              LazyHTML.query(
                document,
-               "script#fluently-embed[data-project='#{id}'][data-demo='true'][src='/embed.js']"
+               "script#fluently-embed:not([data-project])[data-demo='true'][src='/embed.js']"
              )
            )
 
@@ -24,8 +23,8 @@ defmodule FluentlyWeb.DogfoodTest do
     refute Enum.any?(LazyHTML.query(login, "script#fluently-embed"))
   end
 
-  test "self-installation is opt-in" do
-    Application.delete_env(:fluently, :dogfood_project_id)
+  test "landing demo can be disabled" do
+    Application.put_env(:fluently, :demo_enabled, false)
     document = build_conn() |> get("/") |> html_response(200) |> LazyHTML.from_document()
     refute Enum.any?(LazyHTML.query(document, "script#fluently-embed"))
   end

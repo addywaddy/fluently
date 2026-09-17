@@ -18,14 +18,15 @@ defmodule Fluently.Accounts do
 
   def current(_), do: nil
 
-  def demo_template, do: Feedback.project(Application.get_env(:fluently, :dogfood_project_id))
+  def demo_enabled?, do: Application.get_env(:fluently, :demo_enabled, true)
   def demo_project(nil), do: nil
   def demo_project(account), do: Feedback.project(account.demo_project_id)
 
-  def first_comment(account, attrs) do
+  def first_comment(account, attrs, origin) do
     Repo.transaction(fn ->
+      if not demo_enabled?(), do: Repo.rollback(:disabled)
       {account, token} = if account, do: {reload_active_account(account), nil}, else: anonymous!()
-      {account, project, reviewer} = ensure_demo!(account)
+      {account, project, reviewer} = ensure_demo!(account, origin)
 
       case Threads.create(project, reviewer, attrs) do
         {:ok, thread} -> %{account: account, token: token, thread: thread}
@@ -145,16 +146,17 @@ defmodule Fluently.Accounts do
     {account, token}
   end
 
-  defp ensure_demo!(account) do
+  defp ensure_demo!(account, origin) do
     case demo_project(account) do
       nil ->
-        template = demo_template() || Repo.rollback(:disabled)
-
-        {:ok, project, _} =
-          Feedback.create_project(
-            %Workspace{id: account.workspace_id},
-            %{"name" => "My Fluently demo", "origin" => template.origin}
-          )
+        project =
+          case Feedback.create_project(
+                 %Workspace{id: account.workspace_id},
+                 %{"name" => "My Fluently demo", "origin" => origin}
+               ) do
+            {:ok, project, _} -> project
+            {:error, error} -> Repo.rollback(error)
+          end
 
         reviewer =
           %Reviewer{

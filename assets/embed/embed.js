@@ -4,19 +4,19 @@ import {captureSnapshot} from './snapshot.mjs'
 import {snapshotUnavailableReason} from './snapshot-policy.mjs'
 
 const script = document.currentScript
+const demo = script?.dataset.demo === 'true' && new URL(script.src).origin === location.origin
 const project = script?.dataset.project
-if (project && !document.querySelector('fluently-feedback')) {
+if ((demo || project) && !document.querySelector('fluently-feedback')) {
   const service = new URL(script.src).origin
   const storageKey = `fluently:${service}:${project}`
-  let invitation = new URLSearchParams(location.hash.slice(1)).get('fluently')
+  let invitation = demo ? null : new URLSearchParams(location.hash.slice(1)).get('fluently')
   if (invitation) {
     const fragment = new URLSearchParams(location.hash.slice(1))
     fragment.delete('fluently')
     history.replaceState(history.state, '', location.pathname + location.search + (fragment.size ? '#' + fragment : ''))
   }
   let token = null
-  try { token = sessionStorage.getItem(storageKey) } catch { /* memory-only session */ }
-  const demo = script.dataset.demo === 'true' && service === location.origin && !invitation && !token
+  try { if (!demo) token = sessionStorage.getItem(storageKey) } catch { /* memory-only session */ }
   if (demo || invitation || token) initialize().catch(() => console.warn('Fluently could not initialize.'))
 
   async function initialize() {

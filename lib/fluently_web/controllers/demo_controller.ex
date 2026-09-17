@@ -21,10 +21,11 @@ defmodule FluentlyWeb.DemoController do
 
   def create(conn, params) do
     # Only the landing page is a public demo, never arbitrary customer pages.
-    project = Accounts.demo_project(conn.assigns.account) || conn.assigns.template
-    params = Map.put(params, "page", project.origin <> "/")
+    project = Accounts.demo_project(conn.assigns.account)
+    origin = if project, do: project.origin, else: request_origin(conn)
+    params = Map.put(params, "page", origin <> "/")
 
-    case Accounts.first_comment(conn.assigns.account, params) do
+    case Accounts.first_comment(conn.assigns.account, params, origin) do
       {:ok, %{token: token, thread: thread, account: account}} ->
         conn =
           if token,
@@ -129,11 +130,10 @@ defmodule FluentlyWeb.DemoController do
 
   defp boundary(conn, _) do
     conn = put_resp_header(conn, "cache-control", "no-store")
-    template = Accounts.demo_template()
     account = Accounts.current(get_session(conn, :account_token))
 
     cond do
-      is_nil(template) ->
+      not Accounts.demo_enabled?() ->
         conn |> error(404, "Demo unavailable") |> halt()
 
       get_req_header(conn, "origin") not in [[], [request_origin(conn)]] ->
@@ -153,7 +153,7 @@ defmodule FluentlyWeb.DemoController do
         conn |> error(429, "Too many requests. Try again in a minute.") |> halt()
 
       true ->
-        conn |> assign(:account, account) |> assign(:template, template)
+        assign(conn, :account, account)
     end
   end
 

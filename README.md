@@ -52,13 +52,13 @@ On customer websites, no invitation/session means no widget or feedback requests
 
 ## Dogfooding on Fluently
 
-Create a project for the Fluently service origin itself (locally `http://localhost:4000`).
-Set `FLUENTLY_PROJECT_ID` to that public project UUID and restart the service. Only the
-landing route includes the embed; login and project-management screens do not.
+The landing demo is enabled by default locally and in production. No project setup,
+ID, or invitation is required. Only the landing route includes the embed; login and
+project-management screens do not. Set `FLUENTLY_DEMO_ENABLED=false` to disable it.
 Ordinary visitors can click the floating Fluently logo without an invitation or name prompt.
 Their first successful comment creates an anonymous account and a private demo project.
 A signed HttpOnly, SameSite cookie remembers their session across reloads. Each visitor
-sees only their own demo; these comments are not sent to the shared dogfood project.
+sees only their own demo. The private project uses the origin serving the landing page.
 
 **Save my demo** opens `/signup`. Registration upgrades the same account, preserves its
 comments, and unlocks project creation in `/app`. A new session replaces the anonymous
@@ -74,21 +74,9 @@ Unclaimed demos expire 14 days after creation and are deleted by an hourly clean
 worker (up to 500 per run). Clearing cookies loses access to an unclaimed demo. Signup
 removes its expiry. Registered sessions last 30 days; sign-out revokes them server-side.
 
-The original private review link still opens the shared, invitation-only dogfood review.
-Use a fresh tab without that review link to try the personal demo.
-
-For local development, keep the public ID in an ignored `.env.local`:
-
-```sh
-# .env.local contains: FLUENTLY_PROJECT_ID=your-project-uuid
-set -a
-. ./.env.local
-set +a
-mix phx.server
-```
-
-In production, create a new project for the real HTTPS origin and set the same environment
-variable through your host. Do not put review or API secrets in this setting.
+Run `mix phx.server` locally; the same demo flow runs at `https://fluently.now` in
+production. Existing private demo projects and comments remain intact. Customer embeds
+still require a public project ID and an authorized reviewer session.
 
 ## Anchors and privacy
 

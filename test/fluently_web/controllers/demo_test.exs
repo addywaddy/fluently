@@ -4,24 +4,21 @@ defmodule FluentlyWeb.DemoTest do
   alias Fluently.Accounts.Account
 
   setup do
-    previous = Application.get_env(:fluently, :dogfood_project_id)
-    {:ok, workspace, _} = Feedback.create_workspace("Demo template")
-
-    {:ok, template, keys} =
-      Feedback.create_project(workspace, %{
-        "name" => "Fluently",
-        "origin" => "https://example.com"
-      })
-
-    Application.put_env(:fluently, :dogfood_project_id, template.id)
-    on_exit(fn -> Application.put_env(:fluently, :dogfood_project_id, previous) end)
-    %{template: template, keys: keys}
+    previous = Application.get_env(:fluently, :demo_enabled)
+    Application.put_env(:fluently, :demo_enabled, true)
+    on_exit(fn -> Application.put_env(:fluently, :demo_enabled, previous) end)
+    :ok
   end
 
   defp visitor do
     n = System.unique_integer([:positive])
 
-    %{build_conn() | remote_ip: {10, div(n, 65536), rem(div(n, 256), 256), rem(n, 256)}}
+    %{
+      build_conn()
+      | host: "localhost",
+        port: 80,
+        remote_ip: {10, div(n, 65536), rem(div(n, 256), 256), rem(n, 256)}
+    }
     |> put_req_header("content-type", "application/json")
   end
 
@@ -38,6 +35,7 @@ defmodule FluentlyWeb.DemoTest do
     }
 
   test "visiting and invalid comments create no account; first successful comment creates one" do
+    assert Repo.aggregate(Fluently.Feedback.Project, :count) == 0
     conn = visitor() |> get("/demo/comments")
     assert json_response(conn, 200)["data"] == []
     assert Repo.aggregate(Account, :count) == 0
@@ -45,7 +43,7 @@ defmodule FluentlyWeb.DemoTest do
     assert Repo.aggregate(Account, :count) == 0
     conn = conn |> next() |> post("/demo/comments", attrs())
     result = json_response(conn, 201)["data"]
-    assert result["page"] == "http://www.example.com/"
+    assert result["page"] == "http://localhost/"
     assert hd(result["messages"])["author"]["kind"] == "anonymous"
     assert Repo.aggregate(Account, :count) == 1
     account = Accounts.current(get_session(conn, :account_token))
@@ -53,10 +51,15 @@ defmodule FluentlyWeb.DemoTest do
     assert conn.resp_cookies["_fluently_key"].http_only
   end
 
-  test "cookie continuity, isolated visitors, replies and resolution", %{
-    template: template,
-    keys: keys
-  } do
+  test "cookie continuity, isolated visitors, replies and resolution" do
+    {:ok, workspace, _} = Feedback.create_workspace("Demo template")
+
+    {:ok, template, keys} =
+      Feedback.create_project(workspace, %{
+        "name" => "Fluently",
+        "origin" => "https://example.com"
+      })
+
     first = visitor() |> post("/demo/comments", attrs())
     thread = json_response(first, 201)["data"]
     second = visitor() |> post("/demo/comments", attrs())
@@ -228,7 +231,7 @@ defmodule FluentlyWeb.DemoTest do
     conn = visitor() |> post("/signup", signup_attrs())
     assert redirected_to(conn) == "/app"
     assert is_nil(Accounts.current(get_session(conn, :account_token)).demo_project_id)
-    Application.delete_env(:fluently, :dogfood_project_id)
+    Application.put_env(:fluently, :demo_enabled, false)
     assert visitor() |> post("/demo/comments", attrs()) |> json_response(404)
   end
 
@@ -302,7 +305,7 @@ defmodule FluentlyWeb.DemoTest do
   end
 
   test "same-origin demo works on an alternate app address, including snapshots and reload" do
-    conn = %{visitor() | host: "127.0.0.1", port: 4000}
+    conn = %{visitor() | host: "127.0.0.1", scheme: :http, port: 4000}
     conn = put_req_header(conn, "origin", "http://127.0.0.1:4000")
     saved = post(conn, "/demo/comments", attrs())
     thread = json_response(saved, 201)["data"]
@@ -310,7 +313,7 @@ defmodule FluentlyWeb.DemoTest do
     account = Accounts.current(get_session(saved, :account_token))
 
     assert Threads.get(Accounts.demo_project(account), thread["id"]).page ==
-             "https://example.com/"
+             "http://127.0.0.1:4000/"
 
     reloaded =
       saved
@@ -338,7 +341,7 @@ defmodule FluentlyWeb.DemoTest do
   end
 
   defp next_alias(conn) do
-    %{next(conn) | host: "127.0.0.1", port: 4000}
+    %{next(conn) | host: "127.0.0.1", scheme: :http, port: 4000}
     |> put_req_header("origin", "http://127.0.0.1:4000")
   end
 end

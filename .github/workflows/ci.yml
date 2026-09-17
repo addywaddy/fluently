@@ -82,7 +82,6 @@ jobs:
       KAMAL_REGISTRY_USERNAME: addywaddy
       LITESTREAM_BUCKET: fluently-backups
       MAIL_FROM: hello@fluently.now
-      FLUENTLY_PROJECT_ID: ${{ vars.FLUENTLY_PROJECT_ID }}
       KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD }}
       SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
