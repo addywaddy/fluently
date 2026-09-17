@@ -23,6 +23,10 @@ Visitors can also register at `/signup` and sign in at `/login` with email and p
 Owner keys are bearer credentials: keep them in a password manager, not in the embed.
 
 Run `mix precommit` and `node --test test/embed/*.test.mjs` for checks.
+GitHub Actions runs on pushes to `main`, pull requests targeting `main`, and manual dispatch.
+It checks formatting and compilation warnings, runs backend/SDK tests, and builds the
+production Docker image (including assets and the release). CI needs no production
+secrets and does not publish images, apply Terraform, or deploy.
 Run `mix assets.build` after editing `assets/embed/`; the normal development watcher watches app.js only.
 
 ## Create a project and install

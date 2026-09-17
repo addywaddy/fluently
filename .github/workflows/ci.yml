@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.20.2'
+          otp-version: '29.0.3'
+          version-type: strict
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build/test
+          key: ${{ runner.os }}-otp-29.0.3-elixir-1.20.2-test-${{ hashFiles('mix.lock') }}
+      - name: Install dependencies
+        run: mix deps.get --check-locked
+      - name: Check formatting
+        run: mix format --check-formatted
+      - name: Compile with warnings as errors
+        run: mix compile --warnings-as-errors
+      - name: Test backend against SQLite
+        run: mix test
+      - name: Test embed SDK
+        run: node --test test/embed/*.test.mjs
+
+  build:
+    name: Production Docker build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Builds assets and a Mix release using the same Dockerfile as Kamal.
+      # No runtime credentials, image publishing, or deployment needed.
+      - name: Build production image
+        run: docker build --tag fluently:ci .
