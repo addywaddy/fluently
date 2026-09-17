@@ -10,6 +10,9 @@ The repository includes `config/deploy.yml` for **Kamal 2.12+** and the existing
 Docker release. Install Kamal on your workstation (`gem install kamal -v 2.12.0`);
 Ruby is only a deployment tool dependency. Docker must be running locally to build.
 
+The [Terraform configuration](../terraform/README.md) can provision the Hetzner VPS
+and private backup bucket; its plan must be reviewed before a separately authorized apply.
+
 Prepare one Linux server with SSH access, ports 80/443 available, and your domain's DNS
 pointing to it. Default architecture is amd64; set `FLUENTLY_ARCH=arm64` for an ARM server.
 Create a private image repository (default registry: GHCR) and registry credentials.

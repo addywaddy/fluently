@@ -56,3 +56,5 @@ designs
 *.db-*
 
 .kamal
+
+terraform
