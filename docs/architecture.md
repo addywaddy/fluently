@@ -61,8 +61,8 @@ exported and imported with IDs, timestamps, binary credential hashes and JSON pr
 the old PostgreSQL database remains untouched for rollback.
 
 Deploy one application instance on persistent local storage. SQLite is not a shared-disk
-clustering solution. Litestream is the intended backup approach but is deferred at the
-user's request; no automated remote backup or restore is configured yet.
+clustering solution. Litestream runs as a separate Kamal accessory sharing that volume; backup configuration
+is included, but remote replication and restoration must be verified when deployed.
 
 ## Kamal deployment (2026-09-17)
 
@@ -78,3 +78,11 @@ host/volume; SQLite serializes writes, but both releases must understand the sch
 Only backward-compatible migrations belong in normal rolling deploys. Destructive
 changes require maintenance downtime and a tested backup. Rate limiting remains
 per-process during this brief overlap. Rollback changes the image, not database state.
+
+
+Litestream is pinned to 0.5.14 and runs independently of Phoenix deployments. Both
+containers use UID/GID 65534 to avoid SQLite WAL/SHM ownership conflicts. Prepare the
+named volume before the first accessory boot: Kamal starts accessories before the app,
+so relying on the app image to initialize volume permissions is insufficient. A dedicated
+Hetzner Nuremberg bucket holds daily snapshots with seven-day retention. Replication is
+asynchronous, not failover; backup freshness and a restore drill are deployment checks.

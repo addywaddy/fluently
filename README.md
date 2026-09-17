@@ -10,7 +10,7 @@ Requires Elixir 1.17+ / compatible OTP and Node 22+ for SDK tests only.
 This build was checked with Elixir 1.20.2 / OTP 29. SQLite is embedded; no database
 server is needed. Development and test databases live in ignored `data/` files.
 Production uses persistent local storage; see [deployment](docs/deployment.md).
-Litestream backups are deferred.
+Kamal runs Litestream as a separate backup accessory; configure its bucket and credentials before deployment.
 
 ```sh
 mix setup

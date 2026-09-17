@@ -1,8 +1,8 @@
 # Deploying the pilot
 
 One Phoenix instance with SQLite on persistent local storage. A hosting destination is
-not configured. Litestream is the intended backup approach but is deferred; automated
-remote backups and restore are not configured yet.
+not configured. Litestream is configured as a Kamal accessory; remote backup and restore
+verification requires a deployed host and bucket credentials.
 
 ## Kamal (recommended)
 
@@ -20,6 +20,7 @@ export FLUENTLY_SERVER=your-server-ip
 export PHX_HOST=feedback.your-domain.com
 export FLUENTLY_IMAGE=your-registry-user/fluently
 export KAMAL_REGISTRY_USERNAME=your-registry-user
+export LITESTREAM_BUCKET=your-dedicated-fluently-backup-bucket
 # Optional: KAMAL_REGISTRY_SERVER, FLUENTLY_ARCH, FLUENTLY_SSH_USER (default root)
 cp .kamal/secrets.example .kamal/secrets
 ```
@@ -30,7 +31,11 @@ and retain it across deployments. Never commit either credential. Deployment set
 used by ERB belong in the shell environment, not only in `.kamal/secrets`.
 
 ```sh
-kamal setup                 # first deployment: prepares host, builds and starts app
+kamal server bootstrap      # install Docker on the target host
+# Initialize ownership BEFORE accessories boot (only needed for a new volume).
+ssh "${FLUENTLY_SSH_USER:-root}@$FLUENTLY_SERVER" \
+  'docker run --rm -v fluently_data:/data alpine:3.21 sh -c "chown 65534:65534 /data && chmod 700 /data"'
+kamal setup                 # first deployment: starts accessories and app
 kamal deploy                # subsequent deployments
 kamal app logs
 ```
@@ -40,8 +45,7 @@ validates the configuration locally, but can display secrets; do not share its o
 No server has been contacted or provisioned by this repository setup.
 
 Kamal mounts **`fluently_data:/data`**, runs migrations before Phoenix starts, and checks
-`/up` before switching traffic. The fresh volume inherits the image's writable `/data`
-permissions. Keep this volume across deployments; do not delete it or scale this config
+`/up` before switching traffic. The volume preparation above sets writable `/data` permissions for both containers. Keep this volume across deployments; do not delete it or scale this config
 to multiple servers. The HTTP health route is excluded from SSL redirection; all normal
 routes retain HTTPS enforcement. Kamal terminates TLS and forwards the scheme; do not
 publish port 4000 directly to the internet.
@@ -55,11 +59,69 @@ image only; it does not undo migrations or restore deleted data.
 After initial deployment, sign up and create projects through `/app`. To enable the
 landing demo, create a project for the production HTTPS origin, export its public UUID
 as `FLUENTLY_PROJECT_ID`, and deploy again. Local demo data is not uploaded automatically.
-Litestream remains deferred.
+See the backup setup and restore procedure below.
 
 References: [Kamal configuration](https://kamal-deploy.org/docs/configuration/overview/),
 [proxy and health checks](https://kamal-deploy.org/docs/configuration/proxy/),
 [Phoenix releases](https://phoenix.hexdocs.pm/Mix.Tasks.Phx.Gen.Release.html).
+
+## Litestream backups
+
+Create a **dedicated private bucket in Hetzner's nbg1 region**, then export its name as
+`LITESTREAM_BUCKET`. Provide `LITESTREAM_ACCESS_KEY_ID` and
+`LITESTREAM_SECRET_ACCESS_KEY` in your shell/password manager or ignored `.kamal/secrets`.
+Use credentials authorized to list/read/write/delete backup objects in that bucket.
+Do not reuse Chronologs' bucket/path combination. No credentials were copied from it.
+
+`config/litestream.yml` replicates `/data/fluently.db` to `production` in that bucket.
+It uses the nbg1 endpoint, path-style S3 requests, daily snapshots and seven-day retention.
+Adjust provider/region there if needed. Deleted application data may remain in retained
+backups. Bucket lifecycle rules must not remove objects still needed by Litestream.
+
+For an existing Kamal installation, prepare/check volume ownership as above, then run:
+
+```sh
+kamal accessory boot litestream
+kamal accessory logs litestream
+```
+
+Normal `kamal deploy` leaves the accessory running. After changing its config, credentials
+or pinned image, run `kamal accessory reboot litestream`. Run only one replicator for this
+database. Backups are asynchronous, so unsynced writes can be lost if the host fails.
+Monitor accessory logs for upload failures and verify fresh objects in the bucket.
+Do not treat a healthy application endpoint as evidence that backups are working.
+
+### Restore drill / recovery
+
+On the deployment server, set `LITESTREAM_BUCKET`, `LITESTREAM_ACCESS_KEY_ID`, and
+`LITESTREAM_SECRET_ACCESS_KEY` securely in the shell. Place the repository's
+`config/litestream.yml` at an absolute local path, represented by `$LITESTREAM_CONFIG`:
+
+```sh
+export LITESTREAM_CONFIG=/absolute/path/to/litestream.yml
+docker volume create fluently_restore
+docker run --rm -v fluently_restore:/data alpine:3.21 \
+  sh -c 'chown 65534:65534 /data && chmod 700 /data'
+docker run --rm --user 65534:65534 \
+  -e LITESTREAM_BUCKET -e LITESTREAM_ACCESS_KEY_ID -e LITESTREAM_SECRET_ACCESS_KEY \
+  -v fluently_restore:/data -v "$LITESTREAM_CONFIG:/etc/litestream.yml:ro" \
+  litestream/litestream:0.5.14 restore -config /etc/litestream.yml /data/fluently.db
+```
+
+Use a fresh volume for each drill. Missing backups or an existing destination must fail;
+do not add flags that silently skip restoration. This command only reads remote backups.
+Check `PRAGMA integrity_check` and `PRAGMA foreign_key_check` with SQLite, then verify
+representative accounts, threads, replies and anchors in an isolated application instance.
+Do not start a second replicator against the production prefix during a drill.
+
+For actual recovery, stop the app **and** accessory first (`kamal app stop` and
+`kamal accessory stop litestream`). Restore into the new volume, verify it, then change
+**both** volume mappings in `config/deploy.yml` to the restored volume. Retain the old
+volume for investigation. Deploy the application and reboot the accessory using the new
+mapping. Never copy a restored file over an active database or retain stale WAL/SHM files.
+
+References: [Litestream configuration](https://litestream.io/reference/config/),
+[restore](https://litestream.io/reference/restore/).
 
 ## Manual Docker deployment
 

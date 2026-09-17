@@ -1,0 +1,15 @@
+# Litestream 0.5.14. Dedicated Fluently bucket; never use Chronologs' replica path.
+# Credentials are automatically read from LITESTREAM_ACCESS_KEY_ID/SECRET_ACCESS_KEY.
+snapshot:
+  interval: 24h
+  retention: 168h
+
+dbs:
+  - path: /data/fluently.db
+    replica:
+      type: s3
+      endpoint: https://nbg1.your-objectstorage.com
+      region: nbg1
+      bucket: ${LITESTREAM_BUCKET}
+      path: production
+      force-path-style: true
