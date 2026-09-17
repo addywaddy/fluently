@@ -12,7 +12,8 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Never interrupt a production deployment with a newer push.
+  cancel-in-progress: false
 
 jobs:
   checks:
@@ -63,3 +64,64 @@ jobs:
       # No runtime credentials, image publishing, or deployment needed.
       - name: Build production image
         run: docker build --tag fluently:ci .
+
+  deploy:
+    name: Deploy fluently.now
+    needs: [checks, build]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: fluently-production
+      cancel-in-progress: false
+    env:
+      FLUENTLY_SERVER: 159.69.46.208
+      PHX_HOST: fluently.now
+      FLUENTLY_IMAGE: addywaddy/fluently
+      KAMAL_REGISTRY_USERNAME: addywaddy
+      LITESTREAM_BUCKET: fluently-backups
+      MAIL_FROM: hello@fluently.now
+      FLUENTLY_PROJECT_ID: ${{ vars.FLUENTLY_PROJECT_ID }}
+      KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD }}
+      SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      LITESTREAM_ACCESS_KEY_ID: ${{ secrets.LITESTREAM_ACCESS_KEY_ID }}
+      LITESTREAM_SECRET_ACCESS_KEY: ${{ secrets.LITESTREAM_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Install Kamal
+        run: gem install kamal -v 2.12.0 --no-document && gem install ed25519 bcrypt_pbkdf --no-document
+      - name: Configure deployment SSH and secrets
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host *\n  StrictHostKeyChecking yes\n  IdentitiesOnly yes\n' > ~/.ssh/config
+          cp .kamal/secrets.example .kamal/secrets
+      - name: Prepare Fluently storage
+        run: |
+          ssh root@"$FLUENTLY_SERVER" 'docker run --rm -v fluently_data:/data alpine:3.21 sh -c "chown 65534:65534 /data && chmod 700 /data"'
+      - name: Deploy application
+        run: kamal deploy --version "$GITHUB_SHA"
+      - name: Ensure Litestream is running
+        run: |
+          if ssh root@"$FLUENTLY_SERVER" 'docker container inspect fluently-litestream >/dev/null 2>&1'; then
+            kamal accessory start litestream
+          else
+            kamal accessory boot litestream
+          fi
+      - name: Verify public HTTPS health
+        run: curl --fail --silent --show-error --retry 6 --retry-delay 5 --retry-all-errors https://fluently.now/up
+      - name: Remove runner credentials
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519 .kamal/secrets

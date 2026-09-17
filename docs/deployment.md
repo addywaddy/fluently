@@ -1,8 +1,31 @@
 # Deploying the pilot
 
 One Phoenix instance with SQLite on persistent local storage. A hosting destination is
-not configured. Litestream is configured as a Kamal accessory; remote backup and restore
+configured as `fluently.now` on the existing Chronologs VPS (`159.69.46.208`). Litestream is configured as a Kamal accessory; remote backup and restore
 verification requires a deployed host and bucket credentials.
+
+## GitHub Actions deployment
+
+Pushes to `main` run lint/tests and a production Docker build, then deploy with
+Kamal 2.12.0 from GitHub's runner. Pull requests never deploy. A manual run of the CI
+workflow on `main` also deploys. Deployments are serialized and are not cancelled by
+new pushes. The `production` environment groups deployment history.
+
+Repository Actions secrets: `KAMAL_REGISTRY_PASSWORD`, `SECRET_KEY_BASE`,
+`RESEND_API_KEY`, `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY`,
+`DEPLOY_SSH_PRIVATE_KEY`, and `DEPLOY_SSH_KNOWN_HOSTS`. The dedicated SSH key uses
+root for Kamal's Docker management, with SSH forwarding/PTY disabled. Its host key
+is pinned from an existing trusted connection, never accepted blindly at runtime.
+Repository writers who change deployment code can use these credentials; keep write
+access restricted. Runtime secrets are passed through the ignored Kamal secrets file.
+
+The workflow prepares only `fluently_data`, deploys the app, starts the Fluently
+Litestream accessory if absent, and checks public HTTPS health. It builds on the
+runner, not the shared production VPS. Existing Chronologs containers/volumes are
+separate. Accessory configuration changes still require a deliberate
+`kamal accessory reboot litestream`; ordinary deploys preserve the running accessory.
+Set repository variable `FLUENTLY_PROJECT_ID` after provisioning the production
+landing demo project. No local customer/demo database is uploaded.
 
 ## Kamal (recommended)
 
