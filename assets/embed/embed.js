@@ -98,7 +98,7 @@ if (project && !document.querySelector('fluently-feedback')) {
     })
     function setCommenting(value) {
       if (value !== commenting) {
-        logoRotation += 360
+        logoRotation += value ? 360 : -360
         logo.style.transform = `rotate(${logoRotation}deg)`
       }
       commenting = value; controls.hidden = !value; pins.hidden = !value
