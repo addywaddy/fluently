@@ -32,3 +32,13 @@ config :logger, level: :info
 # of environment variables, is done on config/runtime.exs.
 
 config :fluently, :secure_cookies, true
+
+config :sentry,
+  environment_name: :prod,
+  enable_source_code_context: true,
+  root_source_code_paths: [File.cwd!()],
+  source_code_path_pattern: "lib/**/*.ex"
+
+config :fluently, :logger, [
+  {:handler, :fluently_sentry, Sentry.LoggerHandler, %{config: %{metadata: [:file, :line]}}}
+]

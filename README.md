@@ -144,6 +144,9 @@ The public project ID never grants access to a private demo or customer project.
 `Fluently.Feedback` owns workspace/project credentials and reviewer sessions;
 `Fluently.Threads` owns scoped conversations; `Fluently.Feedback.Anchor` validates context.
 `assets/embed/anchor.mjs` handles DOM capture/resolution independently of widget UI.
+Production exceptions and process crashes are reported to Sentry with minimized request
+context; local development and tests do not send reports. Source context is packaged
+automatically with releases.
 No MCP, screenshots, billing or agent execution is included. Decisions: [docs/architecture.md](docs/architecture.md).
 Kamal and release instructions: [docs/deployment.md](docs/deployment.md). Use a single app instance for the pilot’s in-memory rate limiter.
 

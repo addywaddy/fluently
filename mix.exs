@@ -9,10 +9,16 @@ defmodule Fluently.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
+      releases: [fluently: [steps: [&package_sentry_sources/1, :assemble]]],
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader]
     ]
+  end
+
+  defp package_sentry_sources(release) do
+    Mix.Task.run("sentry.package_source_code")
+    release
   end
 
   # Configuration for the OTP application.
@@ -51,6 +57,7 @@ defmodule Fluently.MixProject do
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:swoosh, "~> 1.28"},
+      {:sentry, "~> 10.2.0"},
       {:req, "~> 0.5"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},

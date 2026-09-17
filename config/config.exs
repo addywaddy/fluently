@@ -63,6 +63,13 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Runtime DSNs are enabled only for production. Test reports are collected locally.
+config :sentry,
+  dsn: nil,
+  client: Fluently.Sentry.HTTPClient,
+  before_send: {Fluently.Sentry.Privacy, :before_send},
+  in_app_module_allow_list: [Fluently, FluentlyWeb]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

@@ -1,4 +1,5 @@
 defmodule FluentlyWeb.Endpoint do
+  use Sentry.PlugCapture, scrubber: {Fluently.Sentry.Privacy, :scrub_conn, []}
   use Phoenix.Endpoint, otp_app: :fluently
 
   # The session will be stored in the cookie and signed,
@@ -51,6 +52,13 @@ defmodule FluentlyWeb.Endpoint do
     length: 32_768,
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
+
+  plug Sentry.PlugContext,
+    body_scrubber: nil,
+    header_scrubber: nil,
+    cookie_scrubber: nil,
+    remote_address_reader: nil,
+    url_scrubber: {Fluently.Sentry.Privacy, :url}
 
   plug Plug.MethodOverride
   plug Plug.Head

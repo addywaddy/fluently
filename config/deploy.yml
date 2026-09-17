@@ -42,6 +42,7 @@ env:
     PHX_HOST: <%= ENV.fetch("PHX_HOST").to_json %>
     PORT: "4000"
     POOL_SIZE: "5"
+    SENTRY_DSN: <%= ENV.fetch("SENTRY_DSN", "https://3ca39bb375e4a3567447790e24c574c4@o4508133464997888.ingest.de.sentry.io/4512102985957456").to_json %>
     MAIL_FROM: <%= ENV.fetch("MAIL_FROM").to_json %>
 <% if ENV["FLUENTLY_PROJECT_ID"] && !ENV["FLUENTLY_PROJECT_ID"].empty? %>
     FLUENTLY_PROJECT_ID: <%= ENV.fetch("FLUENTLY_PROJECT_ID").to_json %>

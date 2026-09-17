@@ -69,6 +69,27 @@ References: [Kamal configuration](https://kamal-deploy.org/docs/configuration/ov
 [proxy and health checks](https://kamal-deploy.org/docs/configuration/proxy/),
 [Phoenix releases](https://phoenix.hexdocs.pm/Mix.Tasks.Phx.Gen.Release.html).
 
+## Error reporting (Sentry)
+
+Production uses the configured Fluently Sentry project in the EU region. `SENTRY_DSN`
+can override the supplied project DSN; the DSN is an ingestion identifier, not an account
+API token. Kamal passes it to the application. Development has no DSN and tests collect
+reports locally. No Sentry auth token is needed for source packaging or event ingestion.
+
+`Sentry.PlugCapture` wraps the Phoenix endpoint, `Sentry.PlugContext` runs after parsers,
+and a production logger handler captures process crashes. HTTP uses the existing Req
+client. Every `mix release` automatically runs `mix sentry.package_source_code` before
+assembly, including Docker/Kamal builds. Only `lib/**/*.ex` source is packaged.
+
+Reports omit request bodies, headers, cookies, query strings, remote addresses, user
+context, extras, breadcrumbs and attachments. Exception messages and URL paths remain
+for debugging; avoid embedding customer values or credentials in raised errors or paths.
+Configure Sentry's server-side scrubbing and access/retention settings as appropriate.
+Kamal's `KAMAL_VERSION` identifies releases; native deployments can set `SENTRY_RELEASE`.
+
+To verify on a deployed app, send one synthetic exception through a release remote
+console and confirm its event in Sentry. Avoid using real customer requests as test data.
+
 ## Transactional email (Resend)
 
 Verify a sending domain in Resend using the DNS records it provides. Create a sending API
