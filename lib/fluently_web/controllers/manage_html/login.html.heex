@@ -2,6 +2,9 @@
   <a class="wordmark" href="/">Fluently</a>
   <h1>Your workspace</h1>
   <p>
+    <a href={~p"/login"}>Sign in with email</a> or <a href={~p"/signup"}>create an account</a>.
+  </p>
+  <p>
     Pilot access is invitation-only. Enter the owner key supplied when your workspace was created.
   </p>
   <p :if={@error} role="alert">{@error}</p>

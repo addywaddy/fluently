@@ -38,7 +38,10 @@ defmodule FluentlyWeb.ManageController do
       |> put_status(400)
       |> render(:login, form: to_form(%{}), error: "Enter your owner key.")
 
-  def logout(conn, _), do: conn |> configure_session(drop: true) |> redirect(to: ~p"/app/login")
+  def logout(conn, _) do
+    Fluently.Accounts.logout(Fluently.Accounts.current(get_session(conn, :account_token)))
+    conn |> configure_session(drop: true) |> redirect(to: ~p"/")
+  end
 
   def index(conn, _),
     do:
@@ -75,7 +78,9 @@ defmodule FluentlyWeb.ManageController do
           case Phoenix.Token.decrypt(
                  FluentlyWeb.Endpoint,
                  "issued-project-keys",
-                 get_session(conn, :issued_keys) || "", max_age: 300) do
+                 get_session(conn, :issued_keys) || "",
+                 max_age: 300
+               ) do
             {:ok, %{project: ^id, credentials: credentials}} -> credentials
             _ -> nil
           end
@@ -136,6 +141,16 @@ defmodule FluentlyWeb.ManageController do
   end
 
   defp require_owner(conn, _) do
+    account = Fluently.Accounts.current(get_session(conn, :account_token))
+
+    if account && account.email do
+      assign(conn, :workspace, Feedback.workspace(account.workspace_id))
+    else
+      require_pilot_owner(conn)
+    end
+  end
+
+  defp require_pilot_owner(conn) do
     with {:ok, id} <-
            Phoenix.Token.verify(FluentlyWeb.Endpoint, "owner-v1", get_session(conn, :owner) || "",
              max_age: 43_200

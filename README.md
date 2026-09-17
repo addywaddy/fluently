@@ -2,7 +2,7 @@
 
 Figma-style conversations on real websites, with structured context for people and agents.
 Phoenix/PostgreSQL monolith, plain CSS management UI, and a standalone ~15 KB JavaScript embed.
-The landing page remains HTML/CSS only. The original `designs/` files are unchanged.
+The landing design uses plain HTML/CSS; the optional demo uses the embed SDK. The original `designs/` files are unchanged.
 
 ## Local development
 
@@ -17,7 +17,7 @@ mix phx.server
 ```
 
 Save the printed **owner key** and sign in at http://localhost:4000/app/login.
-Pilot owners are provisioned by an operator; there is no public registration or email dependency.
+Visitors can also register at `/signup` and sign in at `/login` with email and password. Operator-issued owner keys remain supported for pilot workspaces.
 Owner keys are bearer credentials: keep them in a password manager, not in the embed.
 
 Run `mix precommit` and `node --test test/embed/*.test.mjs` for checks.
@@ -38,14 +38,32 @@ Run `mix assets.build` after editing `assets/embed/`; the normal development wat
 
 Guests share project-wide review access; there are no individual guest roles in V1. Signed review sessions last 24 hours and persist in sessionStorage for that tab. **Exit** clears the local session. Rotating project keys revokes all existing invitations/sessions and the old API key. Owner sessions last 12 hours.
 
-No invitation/session means no widget or feedback requests. Merely viewing the public snippet gives no read/write access. The host website must be trusted: its scripts can access same-page session storage. The SDK does not bypass host-site authentication.
+On customer websites, no invitation/session means no widget or feedback requests. Merely viewing the public snippet gives no read/write access. The host website must be trusted: its scripts can access same-page session storage. The SDK does not bypass host-site authentication.
 
 ## Dogfooding on Fluently
 
 Create a project for the Fluently service origin itself (locally `http://localhost:4000`).
 Set `FLUENTLY_PROJECT_ID` to that public project UUID and restart the service. Only the
 landing route includes the embed; login and project-management screens do not.
-Use the project’s private review link to start commenting. Ordinary visitors see no widget.
+Ordinary visitors see **Try it · add a comment** without an invitation or name prompt.
+Their first successful comment creates an anonymous account and a private demo project.
+A signed HttpOnly, SameSite cookie remembers their session across reloads. Each visitor
+sees only their own demo; these comments are not sent to the shared dogfood project.
+
+**Save my demo** opens `/signup`. Registration upgrades the same account, preserves its
+comments, and unlocks project creation in `/app`. A new session replaces the anonymous
+session. `/login` restores a registered account on another device. Login opens that
+account’s existing demo; it does not merge a different anonymous demo. Currently one
+active account session is supported: signing in elsewhere revokes the earlier session.
+Email addresses are unverified identifiers; email delivery, verification and password
+recovery are not implemented yet.
+
+Unclaimed demos expire 14 days after creation and are deleted by an hourly cleanup
+worker (up to 500 per run). Clearing cookies loses access to an unclaimed demo. Signup
+removes its expiry. Registered sessions last 30 days; sign-out revokes them server-side.
+
+The original private review link still opens the shared, invitation-only dogfood review.
+Use a fresh tab without that review link to try the personal demo.
 
 For local development, keep the public ID in an ignored `.env.local`:
 
@@ -74,7 +92,7 @@ Hidden, missing, ambiguous, excluded, and offscreen targets have no visible pin;
 
 The embed records a versioned `web/dom` anchor, relative point, viewport, scroll position, browser family, page origin/path, guest identity and messages. Query strings and fragments are dropped. If there is no stable ID, it captures at most 160 characters of the selected target’s text and ARIA label for conservative matching. Set `data-capture-text="false"` on the script to disable that fallback; use explicit IDs in that mode.
 
-No screenshots, form values, cookies, storage contents, DOM dumps or full user-agent strings are collected. Form controls, editable areas, excluded ancestors and containers with sensitive descendants are not selectable. Paths, IDs, selected text and reviewer-written comments may still contain personal data: mark sensitive areas and avoid secrets in feedback. The server validates and allowlists context fields. Owners can delete individual threads or whole projects (including reviewers). Retention is manual in V1; deletion is not backup erasure.
+No screenshots, form values, cookies, storage contents, DOM dumps or full user-agent strings are collected. Form controls, editable areas, excluded ancestors and containers with sensitive descendants are not selectable. Paths, IDs, selected text and reviewer-written comments may still contain personal data: mark sensitive areas and avoid secrets in feedback. The server validates and allowlists context fields. Owners can delete individual threads or whole projects (including reviewers). Unclaimed demos have automatic 14-day retention; other project retention is manual. Deletion is not backup erasure.
 
 Shadow DOM prevents normal CSS collisions. Only feedback mode intercepts host selection events. The widget polls every 15 seconds and notices pathname changes without patching history APIs. Query-driven/hash-driven page states share the same page; cross-origin iframes, closed shadow roots and canvas internals are not supported. Host CSP must permit `script-src` and `connect-src` to the service, and the widget’s inline styles (or a `style-src` nonce matching `data-style-nonce` on the snippet). See architecture notes before using on sensitive websites.
 
@@ -100,8 +118,14 @@ Each thread includes IDs, page, status, timestamps, versioned anchor/context and
 Errors return `{error: {message}}` with 401/403/404/422/429. The embed displays up to 1,000 threads per page;
 the API is paginated. See `test/support/feedback_fixtures.ex` for a complete create payload.
 
+The landing demo uses separate, same-origin `/demo/comments` endpoints with the same
+thread lifecycle payloads. These require the browser cookie and CSRF token for writes;
+they derive the project from the account and accept no project selection from the client.
+The public project ID never grants access to a private demo or customer project.
+
 ## Architecture and deployment
 
+`Fluently.Accounts` owns anonymous-to-registered identities, account sessions and demo retention;
 `Fluently.Feedback` owns workspace/project credentials and reviewer sessions;
 `Fluently.Threads` owns scoped conversations; `Fluently.Feedback.Anchor` validates context.
 `assets/embed/anchor.mjs` handles DOM capture/resolution independently of widget UI.

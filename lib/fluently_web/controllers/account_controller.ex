@@ -1,0 +1,62 @@
+defmodule FluentlyWeb.AccountController do
+  use FluentlyWeb, :controller
+  import Phoenix.Component, only: [to_form: 2]
+  alias Fluently.{Accounts, RateLimit}
+  plug :secure_page
+
+  def signup(conn, _), do: render_form(conn, :signup)
+  def login(conn, _), do: render_form(conn, :login)
+
+  def register(conn, %{"account" => attrs}) do
+    if RateLimit.allow?({:account_auth, conn.remote_ip}, 5) do
+      case Accounts.register(Accounts.current(get_session(conn, :account_token)), attrs) do
+        {:ok, {_account, token}} ->
+          sign_in(conn, token)
+
+        _ ->
+          conn
+          |> put_status(422)
+          |> render_form(
+            :signup,
+            "Could not create your account. Use a name, valid email and a password of 15–128 characters. If you already have an account, sign in."
+          )
+      end
+    else
+      conn |> put_status(429) |> render_form(:signup, "Too many attempts. Try again in a minute.")
+    end
+  end
+
+  def register(conn, _),
+    do: conn |> put_status(422) |> render_form(:signup, "Complete all fields.")
+
+  def authenticate(conn, %{"account" => attrs}) do
+    if RateLimit.allow?({:account_auth, conn.remote_ip}, 5) do
+      case Accounts.login(attrs["email"], attrs["password"]) do
+        {:ok, _account, token} -> sign_in(conn, token)
+        _ -> conn |> put_status(401) |> render_form(:login, "Invalid email or password.")
+      end
+    else
+      conn |> put_status(429) |> render_form(:login, "Too many attempts. Try again in a minute.")
+    end
+  end
+
+  def authenticate(conn, _),
+    do: conn |> put_status(401) |> render_form(:login, "Enter your email and password.")
+
+  defp sign_in(conn, token) do
+    conn
+    |> configure_session(renew: true)
+    |> clear_session()
+    |> put_session(:account_token, token)
+    |> redirect(to: ~p"/app")
+  end
+
+  defp render_form(conn, mode, error \\ nil),
+    do: render(conn, :auth, mode: mode, error: error, form: to_form(%{}, as: :account))
+
+  defp secure_page(conn, _),
+    do:
+      conn
+      |> put_resp_header("cache-control", "no-store")
+      |> put_resp_header("referrer-policy", "no-referrer")
+end

@@ -1,0 +1,211 @@
+defmodule Fluently.Accounts do
+  @moduledoc "Private demo identities, upgraded in place at registration."
+  import Ecto.Query
+  import Ecto.Changeset
+  alias Fluently.{Repo, Feedback, Threads}
+  alias Fluently.Accounts.Account
+  alias Fluently.Feedback.{Reviewer, Workspace, Thread}
+
+  def current(token) when is_binary(token) do
+    now = DateTime.utc_now()
+
+    Repo.one(
+      from a in Account,
+        where: a.session_hash == ^Feedback.hash(token) and a.session_expires_at > ^now,
+        where: is_nil(a.expires_at) or a.expires_at > ^now
+    )
+  end
+
+  def current(_), do: nil
+
+  def demo_template, do: Feedback.project(Application.get_env(:fluently, :dogfood_project_id))
+  def demo_project(nil), do: nil
+  def demo_project(account), do: Feedback.project(account.demo_project_id)
+
+  def first_comment(account, attrs) do
+    Repo.transaction(fn ->
+      {account, token} = if account, do: {lock(account), nil}, else: anonymous!()
+      {account, project, reviewer} = ensure_demo!(account)
+
+      case Threads.create(project, reviewer, attrs) do
+        {:ok, thread} -> %{account: account, token: token, thread: thread}
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  def reviewer(account), do: Repo.get(Reviewer, account.reviewer_id)
+
+  def register(account, attrs) do
+    # Hash outside the transaction; rows only stay locked for database work.
+    changeset = registration_changeset(%Account{}, attrs)
+
+    if changeset.valid? do
+      salt = :crypto.strong_rand_bytes(16)
+      password_hash = password_hash(get_change(changeset, :password), salt)
+
+      Repo.transaction(fn ->
+        account = if account, do: lock(account), else: elem(anonymous!(), 0)
+        if account.email, do: Repo.rollback(:already_registered)
+        token = Feedback.secret()
+
+        account =
+          account
+          |> registration_changeset(attrs)
+          |> put_change(:password_hash, password_hash)
+          |> put_change(:password_salt, salt)
+          |> put_change(:expires_at, nil)
+          |> put_change(:session_hash, Feedback.hash(token))
+          |> put_change(:session_expires_at, DateTime.add(DateTime.utc_now(), 30, :day))
+          |> Repo.update()
+          |> unwrap!()
+
+        Repo.get!(Workspace, account.workspace_id)
+        |> change(name: account.name <> "’s workspace")
+        |> Repo.update!()
+
+        if account.reviewer_id do
+          reviewer(account) |> change(name: account.name, kind: "account") |> Repo.update!()
+        end
+
+        {account, token}
+      end)
+    else
+      {:error, changeset}
+    end
+  end
+
+  def login(email, password)
+      when is_binary(email) and is_binary(password) and byte_size(password) <= 1024 do
+    account = Repo.get_by(Account, email: String.downcase(String.trim(email)))
+    salt = if account, do: account.password_salt, else: <<0::128>>
+    expected = if account, do: account.password_hash, else: <<0::256>>
+    actual = password_hash(password, salt)
+
+    if Plug.Crypto.secure_compare(actual, expected) and account do
+      token = Feedback.secret()
+
+      {:ok, account} =
+        account
+        |> change(
+          session_hash: Feedback.hash(token),
+          session_expires_at: DateTime.add(DateTime.utc_now(), 30, :day)
+        )
+        |> Repo.update()
+
+      {:ok, account, token}
+    else
+      {:error, :unauthorized}
+    end
+  end
+
+  def login(_, _), do: {:error, :unauthorized}
+
+  def logout(nil), do: :ok
+
+  def logout(account),
+    do: account |> change(session_hash: nil, session_expires_at: nil) |> Repo.update()
+
+  # Run periodically; lock each identity so signup and expiry cannot race.
+  def prune_expired do
+    now = DateTime.utc_now()
+
+    Repo.transaction(fn ->
+      accounts =
+        Repo.all(
+          from a in Account,
+            where: not is_nil(a.expires_at) and a.expires_at <= ^now,
+            lock: "FOR UPDATE",
+            limit: 500
+        )
+
+      for account <- accounts do
+        projects = Feedback.projects(%Workspace{id: account.workspace_id}) |> Enum.map(& &1.id)
+        Repo.delete_all(from t in Thread, where: t.project_id in ^projects)
+        Repo.delete!(account)
+        Repo.delete!(Repo.get!(Workspace, account.workspace_id))
+      end
+
+      length(accounts)
+    end)
+  end
+
+  defp anonymous! do
+    {:ok, workspace, _} = Feedback.create_workspace("Your private demo")
+    token = Feedback.secret()
+
+    account =
+      %Account{
+        workspace_id: workspace.id,
+        session_hash: Feedback.hash(token),
+        session_expires_at: DateTime.add(DateTime.utc_now(), 30, :day),
+        expires_at: DateTime.add(DateTime.utc_now(), 14, :day)
+      }
+      |> Repo.insert!()
+
+    {account, token}
+  end
+
+  defp ensure_demo!(account) do
+    case demo_project(account) do
+      nil ->
+        template = demo_template() || Repo.rollback(:disabled)
+
+        {:ok, project, _} =
+          Feedback.create_project(
+            %Workspace{id: account.workspace_id},
+            %{"name" => "My Fluently demo", "origin" => template.origin}
+          )
+
+        reviewer =
+          %Reviewer{
+            project_id: project.id,
+            name: account.name || "You",
+            kind: if(account.email, do: "account", else: "anonymous")
+          }
+          |> Repo.insert!()
+
+        account =
+          account
+          |> change(demo_project_id: project.id, reviewer_id: reviewer.id)
+          |> Repo.update!()
+
+        {account, project, reviewer}
+
+      project ->
+        {account, project, reviewer(account)}
+    end
+  end
+
+  defp lock(account) do
+    now = DateTime.utc_now()
+
+    Repo.one(
+      from a in Account,
+        where: a.id == ^account.id and a.session_hash == ^account.session_hash,
+        where: a.session_expires_at > ^now and (is_nil(a.expires_at) or a.expires_at > ^now),
+        lock: "FOR UPDATE"
+    ) || Repo.rollback(:expired)
+  end
+
+  defp registration_changeset(account, attrs) do
+    account
+    |> cast(attrs, [:name, :email, :password])
+    |> update_change(:email, &(&1 |> String.trim() |> String.downcase()))
+    |> validate_required([:name, :email, :password])
+    |> validate_length(:name, min: 1, max: 80)
+    |> validate_length(:email, max: 160)
+    |> validate_format(:email, ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
+    |> validate_length(:password, min: 15, max: 128)
+    |> validate_change(:password, fn :password, value ->
+      if byte_size(value) > 1024, do: [password: "is too long"], else: []
+    end)
+    |> unique_constraint(:email)
+  end
+
+  defp password_hash(password, salt),
+    do: :crypto.pbkdf2_hmac(:sha256, password, salt, 600_000, 32)
+
+  defp unwrap!({:ok, value}), do: value
+  defp unwrap!({:error, reason}), do: Repo.rollback(reason)
+end

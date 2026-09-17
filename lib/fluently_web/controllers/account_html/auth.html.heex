@@ -1,0 +1,50 @@
+<main class="manage" data-feedback-exclude>
+  <a class="wordmark" href="/">Fluently</a>
+  <h1>{if @mode == :signup, do: "Keep the conversation going.", else: "Welcome back."}</h1>
+  <p :if={@mode == :signup}>
+    Save your private demo and start collecting feedback on your own website.
+  </p>
+  <p :if={@error} role="alert">{@error}</p>
+  <.form
+    for={@form}
+    action={if @mode == :signup, do: ~p"/signup", else: ~p"/login"}
+    id="account-form"
+  >
+    <.input
+      :if={@mode == :signup}
+      field={@form[:name]}
+      label="Your name"
+      required
+      maxlength="80"
+      autocomplete="name"
+      class="manage-input"
+    />
+    <.input
+      field={@form[:email]}
+      type="email"
+      label="Email"
+      required
+      maxlength="160"
+      autocomplete="email"
+      class="manage-input"
+    />
+    <.input
+      field={@form[:password]}
+      type="password"
+      label={if @mode == :signup, do: "Password (at least 15 characters)", else: "Password"}
+      required
+      minlength={if @mode == :signup, do: "15"}
+      maxlength="128"
+      autocomplete={if @mode == :signup, do: "new-password", else: "current-password"}
+      class="manage-input"
+    />
+    <button class="button button-primary">{if @mode == :signup,
+      do: "Create account",
+      else: "Sign in"}</button>
+  </.form>
+  <p :if={@mode == :signup}>
+    Already have an account? <a href={~p"/login"}>Sign in</a>. Signing in opens that account’s demo; it does not merge this anonymous demo.
+  </p>
+  <p :if={@mode == :login}>New to Fluently? <a href={~p"/signup"}>Create an account</a>.</p>
+  <p><a href="/">Back to the demo</a></p>
+</main>

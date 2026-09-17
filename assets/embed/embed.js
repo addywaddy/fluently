@@ -14,7 +14,8 @@ if (project && !document.querySelector('fluently-feedback')) {
   }
   let token = null
   try { token = sessionStorage.getItem(storageKey) } catch { /* memory-only session */ }
-  if (invitation || token) initialize().catch(() => console.warn('Fluently could not initialize.'))
+  const demo = script.dataset.demo === 'true' && service === location.origin && !invitation && !token
+  if (demo || invitation || token) initialize().catch(() => console.warn('Fluently could not initialize.'))
 
   async function initialize() {
     if (!document.body) await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once: true}))
@@ -51,14 +52,19 @@ if (project && !document.querySelector('fluently-feedback')) {
     let panelMode = '', lastFocus = null, busy = false, countLabel = '', destroyed = false
     const announce = text => { live.textContent = text }
     const errorBox = () => { const node = el('p', '', 'error'); node.setAttribute('role', 'alert'); return node }
-    const toggle = button('Add comment', () => setArmed(!armed), 'primary')
+    const toggle = button(demo ? 'Try it · add a comment' : 'Add comment', () => setArmed(!armed), 'primary')
     const listButton = button('Threads', () => showList())
     const exit = button('Exit', () => { try { sessionStorage.removeItem(storageKey) } catch {} ; token = null; cleanup() })
     bar.append(el('strong', 'Fluently'), toggle, listButton, exit)
+    const saveDemo = el('a', 'Save my demo')
+    if (demo) {
+      saveDemo.href = '/signup'; saveDemo.style.cssText = 'color:#1c597c;padding:8px'
+      bar.append(saveDemo)
+    }
     const setArmed = value => {
       armed = value; hint.hidden = !value; outline.hidden = true
       hint.textContent = 'Click or right-click an element · Esc to cancel';
-      toggle.textContent = value ? 'Cancel' : 'Add comment'; toggle.setAttribute('aria-pressed', String(value))
+      toggle.textContent = value ? 'Cancel' : demo && !threads.length ? 'Try it · add a comment' : 'Add comment'; toggle.setAttribute('aria-pressed', String(value))
       if (value) { closePanel(); announce('Choose an element. Press Escape to cancel.') }
     }
     function openPanel(title, mode) {
@@ -71,9 +77,10 @@ if (project && !document.querySelector('fluently-feedback')) {
     }
     function closePanel() { panel.hidden = true; panelMode = ''; draft = null; selected = null; if (lastFocus?.isConnected) lastFocus.focus({preventScroll:true}) }
     async function api(path, method = 'GET', data) {
-      const response = await fetch(`${service}/api/projects/${encodeURIComponent(project)}${path}`, {
-        method, mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer',
-        headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+      const base = demo ? `${service}/demo` : `${service}/api/projects/${encodeURIComponent(project)}`
+      const response = await fetch(`${base}${path}`, {
+        method, mode: demo ? 'same-origin' : 'cors', credentials: demo ? 'same-origin' : 'omit', referrerPolicy: 'no-referrer',
+        headers: {'Content-Type': 'application/json', ...(demo ? {'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || ''} : token ? {Authorization: `Bearer ${token}`} : {})},
         body: data ? JSON.stringify(data) : undefined,
         signal: AbortSignal.timeout(15000)
       })
@@ -144,13 +151,14 @@ if (project && !document.querySelector('fluently-feedback')) {
       position()
     }
     async function refresh(report = false) {
-      if (!token || loading || destroyed) return
+      if ((!demo && !token) || loading || destroyed) return
       loading = true
       const requestedPage = page
       try {
         let offset = 0, result, all = []
         do {
           result = await api(`/comments?page=${encodeURIComponent(requestedPage)}&offset=${offset}`)
+          if (demo && result.registered) { saveDemo.textContent = 'My workspace'; saveDemo.href = '/app' }
           all.push(...result.data); offset = result.next_offset
         } while (offset !== null && all.length < 1000)
         if (requestedPage !== page || destroyed) return
@@ -174,6 +182,7 @@ if (project && !document.querySelector('fluently-feedback')) {
       select.value = filter
       select.addEventListener('change', () => {filter = select.value; renderPins(); showList()})
       panel.append(select, el('p', 'Pins are hidden when their target is absent, ambiguous, excluded, or outside this view.', 'muted'))
+      if (demo) panel.append(el('p', 'Your private demo. Other visitors cannot see these comments. Unsaved demos expire after 14 days; clearing cookies loses access. Sign up to keep yours.', 'muted'))
       const matching = threads.filter(t => t.status === filter)
       if (!matching.length) panel.append(el('p', 'No threads yet. Add a comment to an element on this page.'))
       for (const [i, thread] of matching.entries()) {
@@ -225,6 +234,7 @@ if (project && !document.querySelector('fluently-feedback')) {
         const snapshot = {anchor, context: context(), page: pageURL()}
         setArmed(false); openPanel('New comment', 'draft'); draft = snapshot
         panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
+        if (demo) panel.append(el('p', 'Only you can see your demo comments. We remember you with a cookie. Sign up to keep them; unsaved demos expire after 14 days.', 'muted'))
         if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
         messageForm('What should change?', async body => {
           if (!draft || draft.page !== pageURL()) throw new Error('The page changed. Select the element again.')

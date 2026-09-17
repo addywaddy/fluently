@@ -11,6 +11,7 @@ defmodule Fluently.Application do
       FluentlyWeb.Telemetry,
       Fluently.Repo,
       Fluently.RateLimit,
+      Fluently.Accounts.Retention,
       {DNSCluster, query: Application.get_env(:fluently, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Fluently.PubSub},
       # Start a worker by calling: Fluently.Worker.start_link(arg)

@@ -14,10 +14,29 @@ defmodule FluentlyWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :demo do
+    plug :accepts, ["json"]
+    plug :fetch_session
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+  end
+
+  scope "/demo", FluentlyWeb do
+    pipe_through :demo
+    get "/comments", DemoController, :index
+    post "/comments", DemoController, :create
+    post "/comments/:thread_id/replies", DemoController, :reply
+    patch "/comments/:thread_id", DemoController, :update
+  end
+
   scope "/", FluentlyWeb do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/signup", AccountController, :signup
+    post "/signup", AccountController, :register
+    get "/login", AccountController, :login
+    post "/login", AccountController, :authenticate
     get "/app/login", ManageController, :login
     post "/app/login", ManageController, :authenticate
     post "/app/logout", ManageController, :logout

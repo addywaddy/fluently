@@ -9,6 +9,8 @@ defmodule FluentlyWeb.Endpoint do
     key: "_fluently_key",
     signing_salt: "rst9xFM7",
     same_site: "Lax",
+    max_age: 2_592_000,
+    http_only: true,
     secure: Application.compile_env(:fluently, :secure_cookies, false)
   ]
 

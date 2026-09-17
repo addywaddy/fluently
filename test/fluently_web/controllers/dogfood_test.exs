@@ -15,7 +15,7 @@ defmodule FluentlyWeb.DogfoodTest do
     assert Enum.any?(
              LazyHTML.query(
                document,
-               "script#fluently-embed[data-project='#{id}'][src='/embed.js']"
+               "script#fluently-embed[data-project='#{id}'][data-demo='true'][src='/embed.js']"
              )
            )
 
