@@ -52,7 +52,13 @@ defmodule FluentlyWeb.AccountController do
   end
 
   defp render_form(conn, mode, error \\ nil),
-    do: render(conn, :auth, mode: mode, error: error, form: to_form(%{}, as: :account))
+    do:
+      render(conn, :auth,
+        mode: mode,
+        error: error,
+        form: to_form(%{}, as: :account),
+        page_title: if(mode == :signup, do: "Sign up · Fluently", else: "Log in · Fluently")
+      )
 
   defp secure_page(conn, _),
     do:
