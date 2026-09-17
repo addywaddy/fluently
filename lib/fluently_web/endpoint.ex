@@ -50,6 +50,7 @@ defmodule FluentlyWeb.Endpoint do
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     length: 32_768,
+    body_reader: {FluentlyWeb.RequestBody, :read_body, []},
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
 

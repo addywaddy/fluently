@@ -132,6 +132,15 @@ defmodule Fluently.Threads do
       status: thread.status,
       anchor: thread.anchor,
       context: thread.context,
+      snapshot:
+        if(thread.snapshot,
+          do: %{
+            width: thread.snapshot.width,
+            height: thread.snapshot.height,
+            created_at: thread.snapshot.inserted_at
+          },
+          else: nil
+        ),
       created_at: thread.inserted_at,
       updated_at: thread.updated_at,
       messages:
@@ -184,6 +193,10 @@ defmodule Fluently.Threads do
   defp preload(value),
     do:
       Repo.preload(value,
+        snapshot:
+          from(s in Fluently.Feedback.Snapshot,
+            select: [:thread_id, :width, :height, :inserted_at]
+          ),
         messages: {from(m in Message, order_by: [asc: m.inserted_at, asc: m.id]), [:reviewer]}
       )
 end

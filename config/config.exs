@@ -74,7 +74,15 @@ config :sentry,
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
 
-config :phoenix, :filter_parameters, ["password", "key", "token", "authorization", "body", "name"]
+config :phoenix, :filter_parameters, [
+  "password",
+  "key",
+  "token",
+  "authorization",
+  "body",
+  "name",
+  "data_url"
+]
 
 config :esbuild, :embed,
   args: ~w(embed/embed.js --bundle --target=es2022 --minify --outfile=../priv/static/embed.js),

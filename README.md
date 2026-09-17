@@ -106,9 +106,34 @@ Hidden, missing, ambiguous, excluded, and offscreen targets have no visible pin;
 
 The embed records a versioned `web/dom` anchor, relative point, viewport, scroll position, browser family, page origin/path, guest identity and messages. Query strings and fragments are dropped. If there is no stable ID, it captures at most 160 characters of the selected target’s text and ARIA label for conservative matching. Set `data-capture-text="false"` on the script to disable that fallback; use explicit IDs in that mode.
 
-No screenshots, form values, cookies, storage contents, DOM dumps or full user-agent strings are collected. Form controls, editable areas, excluded ancestors and containers with sensitive descendants are not selectable. Paths, IDs, selected text and reviewer-written comments may still contain personal data: mark sensitive areas and avoid secrets in feedback. The server validates and allowlists context fields. Owners can delete individual threads or whole projects (including reviewers). Unclaimed demos have automatic 14-day retention; other project retention is manual. Deletion is not backup erasure.
+No form values, cookies, storage contents, DOM dumps or full user-agent strings are collected automatically. Element snapshots are optional and previewed before posting. Form controls, editable areas, excluded ancestors and containers with sensitive descendants are not selectable. Paths, IDs, selected text and reviewer-written comments may still contain personal data: mark sensitive areas and avoid secrets in feedback. The server validates and allowlists context fields. Owners can delete individual threads or whole projects (including reviewers). Unclaimed demos have automatic 14-day retention; other project retention is manual. Deletion is not backup erasure.
 
 Shadow DOM prevents normal CSS collisions. Only feedback mode intercepts host selection events. The widget polls every 15 seconds and notices pathname changes without patching history APIs. Query-driven/hash-driven page states share the same page; cross-origin iframes, closed shadow roots and canvas internals are not supported. Host CSP must permit `script-src` and `connect-src` to the service, and the widget’s inline styles (or a `style-src` nonce matching `data-style-nonce` on the snippet). See architecture notes before using on sensitive websites.
+
+## Element snapshots
+
+Select an element, choose **Attach element snapshot**, inspect the preview, then post.
+You can remove the preview before posting. Reopen the thread and choose **View element
+snapshot** to see the historical image. Capture/upload failure does not lose the comment;
+a failed upload offers a retry while the thread stays open.
+
+Snapshots omit `data-feedback-exclude`, `data-feedback-mask`, form controls, editable
+content, embedded documents, canvas/video, and shadow-root contents. Exclusions remove
+subtrees, so spacing can change. Do not rely on this as automatic personal-data detection:
+ordinary text and images can contain private information. Always check the preview.
+Set `data-screenshots="false"` on the embed to hide capture; `data-capture-text="false"`
+also disables it. These are client capture settings, not server authorization rules.
+
+This uses vendored [html-to-image 1.11.13](https://github.com/bubkoo/html-to-image),
+which reconstructs a selected element, rather than recording browser pixels. Fonts can
+fall back, and cross-origin assets, complex CSS, SVG references and browser differences
+can affect the result. Web-font stylesheet scanning is disabled; asset fetches omit
+credentials and referrers. Host CSP must allow `img-src data:` for capture and display.
+The anchor remains responsible for pin positioning.
+
+One immutable PNG per thread, up to 200 KiB and 1200 × 1200 pixels, is stored privately
+in SQLite. It shares project authorization, deletion and retention, and existing database
+backups. No public image URLs or additional storage credentials are needed.
 
 ## API
 
@@ -138,6 +163,13 @@ thread lifecycle payloads. These require the browser cookie and CSRF token for w
 they derive the project from the account and accept no project selection from the client.
 The public project ID never grants access to a private demo or customer project.
 
+Snapshot API: `POST /api/projects/:id/comments/:thread_id/snapshot` accepts
+`{"data_url":"data:image/png;base64,..."}` from the thread author using the review bearer
+token. `GET` on the same path returns `{data: {data_url, width, height, created_at}}` to
+project reviewers or read-only API keys. Retries preserve the original attachment.
+Thread/list responses contain snapshot dimensions/time or null, never image bytes.
+The private demo uses `/demo/comments/:thread_id/snapshot` with its cookie/CSRF session.
+
 ## Architecture and deployment
 
 `Fluently.Accounts` owns anonymous-to-registered identities, account sessions and demo retention;
@@ -147,7 +179,7 @@ The public project ID never grants access to a private demo or customer project.
 Production exceptions and process crashes are reported to Sentry with minimized request
 context; local development and tests do not send reports. Source context is packaged
 automatically with releases.
-No MCP, screenshots, billing or agent execution is included. Decisions: [docs/architecture.md](docs/architecture.md).
+No MCP, billing or agent execution is included. Decisions: [docs/architecture.md](docs/architecture.md).
 Kamal and release instructions: [docs/deployment.md](docs/deployment.md). Use a single app instance for the pilot’s in-memory rate limiter.
 
 A separate-origin test host is in `test/fixtures/host/index.html`. Copy it to a temporary directory,

@@ -188,4 +188,96 @@ defmodule FluentlyWeb.FeedbackAPITest do
     assert Fluently.Threads.get(ctx.project, one.id)
     assert Fluently.Threads.get(ctx.project, two.id)
   end
+
+  test "snapshots require authorization, remain project scoped and disappear with threads", ctx do
+    thread =
+      api(ctx.token)
+      |> post(ctx.path <> "/comments", Fluently.FeedbackFixtures.attrs())
+      |> json_response(201)
+      |> Map.fetch!("data")
+
+    path = ctx.path <> "/comments/#{thread["id"]}/snapshot"
+    image = Fluently.FeedbackFixtures.snapshot()
+    assert build_conn() |> get(path) |> json_response(401)
+    assert api(ctx.keys.api) |> post(path, %{data_url: image}) |> json_response(403)
+    {:ok, other_token, _} = Feedback.start_review(ctx.project, ctx.keys.review, "Other")
+    assert api(other_token) |> post(path, %{data_url: image}) |> json_response(404)
+
+    assert api(ctx.token)
+           |> post(path, %{data_url: "data:image/svg+xml,<svg/>"})
+           |> json_response(422)
+
+    assert api(ctx.token)
+           |> post(path, %{data_url: "data:image/png;base64," <> String.duplicate("A", 273_069)})
+           |> json_response(422)
+
+    assert api(ctx.token) |> post(path, %{data_url: image}) |> json_response(200)
+
+    assert api(ctx.token)
+           |> post(path, %{data_url: Fluently.FeedbackFixtures.snapshot()})
+           |> json_response(200)
+
+    assert api(ctx.keys.api) |> get(path) |> json_response(200) |> get_in(["data", "data_url"]) ==
+             image
+
+    list = api(ctx.token) |> get(ctx.path <> "/comments") |> json_response(200)
+    assert hd(list["data"])["snapshot"]["width"] == 1
+    refute Jason.encode!(list) =~ "data:image"
+    {:ok, owner, _} = Feedback.create_workspace("Other snapshots")
+
+    {:ok, other, keys} =
+      Feedback.create_project(owner, %{"name" => "Other", "origin" => "https://example.com"})
+
+    assert api(keys.api) |> get(path) |> json_response(401)
+
+    assert api(keys.api)
+           |> get("/api/projects/#{other.id}/comments/#{thread["id"]}/snapshot")
+           |> json_response(404)
+
+    message = hd(thread["messages"])
+
+    assert api(ctx.token)
+           |> delete(ctx.path <> "/comments/#{thread["id"]}/messages/#{message["id"]}")
+           |> json_response(200)
+
+    assert api(ctx.token) |> get(path) |> json_response(404)
+    assert is_nil(Fluently.Repo.get(Fluently.Feedback.Snapshot, thread["id"]))
+  end
+
+  test "snapshot request bodies have a separate bounded limit", ctx do
+    assert_raise Plug.Parsers.RequestTooLargeError, fn ->
+      api(ctx.token)
+      |> post(ctx.path <> "/comments", Jason.encode!(%{body: String.duplicate("a", 40_000)}))
+    end
+
+    assert_raise Plug.Parsers.RequestTooLargeError, fn ->
+      api(ctx.token)
+      |> post(
+        ctx.path <> "/comments/#{Ecto.UUID.generate()}/snapshot",
+        Jason.encode!(%{data_url: String.duplicate("a", 320_000)})
+      )
+    end
+  end
+
+  test "PNG dimensions, corruption and real uploads larger than the normal JSON limit", ctx do
+    {:ok, thread} =
+      Fluently.Threads.create(ctx.project, ctx.reviewer, Fluently.FeedbackFixtures.attrs())
+
+    path = ctx.path <> "/comments/#{thread.id}/snapshot"
+
+    for image <- [
+          Fluently.FeedbackFixtures.snapshot(1201, 1),
+          "data:image/png;base64,bm90IGEgcG5n",
+          Fluently.FeedbackFixtures.snapshot() <> "AAAA"
+        ] do
+      assert api(ctx.token) |> post(path, Jason.encode!(%{data_url: image})) |> json_response(422)
+    end
+
+    image = Fluently.FeedbackFixtures.snapshot(100, 100)
+    assert byte_size(image) > 32_768
+    assert api(ctx.token) |> post(path, Jason.encode!(%{data_url: image})) |> json_response(200)
+    response = api(ctx.keys.api) |> get(path)
+    assert get_resp_header(response, "cache-control") == ["no-store"]
+    assert json_response(response, 200)["data"]["data_url"] == image
+  end
 end

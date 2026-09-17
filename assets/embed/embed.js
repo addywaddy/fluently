@@ -1,5 +1,6 @@
 import {capture, resolve, context, pageURL} from './anchor.mjs'
 import {placement} from './placement.mjs'
+import {captureSnapshot} from './snapshot.mjs'
 
 const script = document.currentScript
 const project = script?.dataset.project
@@ -30,6 +31,7 @@ if (project && !document.querySelector('fluently-feedback')) {
       :host{all:initial;color-scheme:light}*{box-sizing:border-box}button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #1689d5;outline-offset:3px}
       .bar,.panel,.hint,.pin{font:13px/1.5 system-ui,sans-serif;color:#273140;pointer-events:auto}.bar{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));right:max(16px,env(safe-area-inset-right));display:flex;flex-direction:row;align-items:center;gap:12px;max-width:calc(100vw - 32px);pointer-events:none}
       button{background:#f4f8fc;border:1px solid #ccd6e4;border-radius:6px;padding:8px 12px;color:#1c597c}.primary{background:#167dbd;color:white;border-color:#167dbd}.panel{position:fixed;right:16px;top:16px;bottom:88px;width:350px;max-width:calc(100vw - 32px);overflow:auto;padding:20px;background:white;border:1px solid #ccd6e4;border-radius:12px;box-shadow:0 10px 40px #14243a30}.panel h2{font-size:19px;margin:0 0 15px}.panel p{margin:10px 0;overflow-wrap:anywhere}.panel label{display:block;margin:12px 0}.panel input,.panel textarea,.panel select{display:block;width:100%;padding:10px;border:1px solid #bccbdb;border-radius:6px;margin-top:6px;background:white;color:#273140}.panel textarea{min-height:100px;resize:vertical}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row h2{flex:1;margin:0}.muted{font-size:11px;color:#657387}.error{color:#a3313e;font-size:12px}.thread{display:block;width:100%;text-align:left;margin-top:10px;overflow-wrap:anywhere}.message{padding:12px 0;border-bottom:1px solid #e5ebf1;white-space:pre-wrap;overflow-wrap:anywhere}.message strong{font-size:12px}.message time{display:block;font-size:10px;color:#657387}.pin{position:fixed;transform:translate(-50%,-50%);border:2px solid white;box-shadow:0 0 0 1px #167dbd;width:28px;height:28px;padding:0;background:#167dbd;color:white;border-radius:50% 50% 3px 50%;font-size:11px}.hint{position:fixed;top:16px;left:16px;padding:10px 14px;background:#243447;color:white;border-radius:8px;max-width:calc(100vw - 32px);pointer-events:none}.outline{position:fixed;border:2px solid #1689d5;background:#1689d510;pointer-events:none}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}[hidden]{display:none!important}
+      .snapshot{display:block;max-width:100%;height:auto;margin:12px 0;border:1px solid #ccd6e4;border-radius:6px}
       .launcher{position:relative;z-index:1;display:grid;place-items:center;flex:none;width:56px;height:56px;padding:3px;border:1px solid #d6dce3;border-radius:50%;background:white;box-shadow:0 4px 18px #14243a30;pointer-events:auto;transition:box-shadow .15s,border-color .15s}.launcher svg{display:block;width:48px;height:48px;border-radius:50%;overflow:hidden;filter:grayscale(1);opacity:.7;transform:rotate(0deg);transition:transform .6s cubic-bezier(.22,.61,.36,1),filter .6s ease,opacity .6s ease}.launcher:hover svg{opacity:1}.launcher[aria-pressed="true"]{border-color:#2093df;box-shadow:0 0 0 3px #2093df26,0 4px 18px #14243a30}.launcher[aria-pressed="true"] svg{filter:grayscale(0);opacity:1}@media(prefers-reduced-motion:reduce){.launcher,.launcher svg,.controls{transition:none}}
     `
     shadow.append(style)
@@ -277,6 +279,18 @@ if (project && !document.querySelector('fluently-feedback')) {
     function showThread(thread) {
       setArmed(false); openPanel('Comment thread', 'thread'); selected = thread.id
       selectedAnchor = thread.anchor; restoreOutline()
+      if (thread.snapshot) {
+        const section = el('div'), error = errorBox()
+        const view = button('View element snapshot', async () => {
+          view.disabled = true; error.textContent = ''
+          try {
+            const result = await api(`/comments/${thread.id}/snapshot`)
+            const img = el('img', '', 'snapshot'); img.alt = 'Element when this comment was created'; img.src = result.data.data_url
+            section.replaceChildren(el('p', 'Captured when posted · may differ from the current page', 'muted'), img)
+          } catch (e) { error.textContent = e.message; view.disabled = false }
+        })
+        section.append(view, error); panel.append(section)
+      }
       for (const [index, message] of thread.messages.entries()) {
         const item = el('article', '', 'message')
         const time = el('time', new Date(message.created_at).toLocaleString()); time.dateTime = message.created_at
@@ -356,10 +370,54 @@ if (project && !document.querySelector('fluently-feedback')) {
       panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
       if (demo) panel.append(el('p', 'Only you can see your demo comments. We remember you with a cookie. Sign up to keep them; unsaved demos expire after 14 days.', 'muted'))
       if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
+      let image = null, capturing = false
+      const snapshotBox = el('div'), preview = el('div'), snapshotError = errorBox()
+      const attach = button('Attach element snapshot', async () => {
+        capturing = true; attach.disabled = true; snapshotError.textContent = ''
+        try {
+          const target = resolve(anchor)
+          if (target.state !== 'resolved') throw new Error('The element is no longer visible. Post without a snapshot or select it again.')
+          let timer
+          try {
+            image = await Promise.race([captureSnapshot(target.element), new Promise((_, reject) => {
+              timer = setTimeout(() => reject(new Error('Capture timed out. You can still post your comment.')), 12000)
+            })])
+          } finally { clearTimeout(timer) }
+          const img = el('img', '', 'snapshot'); img.alt = 'Snapshot preview — check before posting'; img.src = image
+          preview.replaceChildren(img, el('p', 'Check this preview for private information before posting.', 'muted'), button('Remove snapshot', () => {
+            image = null; preview.replaceChildren(); attach.hidden = false
+          }))
+          attach.hidden = true
+        } catch (e) { image = null; snapshotError.textContent = e.message }
+        finally { capturing = false; attach.disabled = false }
+      })
+      snapshotBox.append(attach, preview, snapshotError, el('p', 'Optional snapshot. Marked private areas and form controls are omitted. Fonts and images may differ.', 'muted'))
+      if (script.dataset.screenshots !== 'false' && script.dataset.captureText !== 'false') panel.append(snapshotBox)
       messageForm('What should change?', async body => {
         if (!draft || draft.page !== pageURL()) throw new Error('The page changed. Select the element again.')
+        if (capturing) throw new Error('Wait for the snapshot preview, then post your comment.')
+        const savedImage = image
         const result = await api('/comments', 'POST', {...draft, body})
         threads.push(result.data); filter = 'open'; renderPins(); showThread(result.data); announce('Comment posted.')
+        if (savedImage) {
+          const savedId = result.data.id
+          const upload = async () => {
+            const uploaded = await api(`/comments/${savedId}/snapshot`, 'POST', {data_url: savedImage})
+            threads = threads.map(t => t.id === savedId ? uploaded.data : t)
+            if (selected === savedId && panelMode === 'thread') showThread(uploaded.data)
+          }
+          try { await upload() }
+          catch {
+            if (selected === savedId && panelMode === 'thread') {
+              const warning = errorBox(); warning.textContent = 'Comment saved, but the snapshot upload failed.'
+              const retry = button('Retry snapshot upload', async () => {
+                retry.disabled = true
+                try { await upload() } catch { retry.disabled = false; warning.textContent = 'Upload failed again. Your comment is saved.' }
+              })
+              panel.append(warning, retry)
+            }
+          }
+        }
       })
     }
     function closeContext(restore = false) {

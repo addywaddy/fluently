@@ -6,12 +6,12 @@
 - Review links carry a separate 14-day secret in the URL fragment. The SDK removes it immediately and exchanges it plus a display name for a signed 24-hour review session. Rotating credentials revokes existing sessions. Guests can create, read, reply, and resolve; reviewers can delete their own replies or delete a thread they started; owners can moderate threads through the dashboard. Deleting an opening message deletes the complete thread, with an explicit UI warning. Message deletion and reply creation lock the parent thread to serialize concurrent changes. Display names are self-asserted, not verified identities.
 - A separate project API key grants read-only structured access for external tools. Never embed it in customer HTML.
 - Anchor envelope: version, platform, type, target identity, relative point, and viewport context. Prefer explicit feedback IDs; uncertain or hidden targets remain in the thread list rather than receiving speculative pins.
-- No screenshots in V1. No DOM dumps, input values, cookies, query strings or URL fragments. Exclusion applies to ancestors and target descendants; bounded selected-target text is captured only when stable IDs are absent, and can be disabled. URL paths and user-written comments may still contain personal data. Customers must mark sensitive regions and reviewers should avoid entering secrets.
+- Optional previewed element snapshots are supported (see below). No DOM dumps, input values, cookies, query strings or URL fragments. Exclusion applies to ancestors and target descendants; bounded selected-target text is captured only when stable IDs are absent, and can be disabled. URL paths and user-written comments may still contain personal data. Customers must mark sensitive regions and reviewers should avoid entering secrets.
 - Shadow DOM isolates widget styling, not security: trusted host-page scripts can access the review session. Use only on websites the project owner trusts. No cross-origin iframe or closed shadow-root targeting in V1.
 - Display pins at a fixed top-right inset rather than the recorded click percentage. The original point remains structured context; the visible badge identifies the whole element and does not claim to track a word through reflow. Comments resolving to the same visible DOM element share a badge.
 - Poll for changes and navigation at modest intervals; use layout observers for pins. Avoid patching host routing/history APIs.
 - Single app instance with bounded in-memory rate limiting for the pilot. Multiple replicas need a shared limiter before scale-out.
-- Deferred: screenshots/redaction pipeline, MCP, billing, automatic code changes, analytics, teams/SSO, configurable retention, native SDKs. Project deletion is available now.
+- Deferred: automated privacy-risk/redaction pipeline, MCP, billing, automatic code changes, analytics, teams/SSO, configurable retention, native SDKs. Project deletion is available now.
 
 ## Personal landing demo and account upgrade
 
@@ -86,3 +86,30 @@ named volume before the first accessory boot: Kamal starts accessories before th
 so relying on the app image to initialize volume permissions is insufficient. A dedicated
 Hetzner Nuremberg bucket holds daily snapshots with seven-day retention. Replication is
 asynchronous, not failover; backup freshness and a restore drill are deployment checks.
+
+## Element snapshots (2026-09-17)
+
+The SDK captures only after an explicit request and shows a removable preview. Posting
+creates the comment first, then attaches the preview in a separate bounded request.
+This makes capture/upload failure independent of the conversation and supports retries
+without duplicate comments. It records a historical rendering; anchors remain the source
+of live pin placement. The vendored MIT html-to-image library adds about 16 KiB to the
+minified embed and avoids new build tooling or runtime CDN dependencies.
+
+A dedicated SQLite attachment table keeps one immutable PNG per thread. This deliberately
+defers object storage: bounded pilot images can share existing transactional deletion,
+retention and Litestream backup. Metadata is preloaded without image bytes; images are
+retrieved separately through the same project boundary and no-store JSON responses.
+Uploads require the thread's author, use existing rate limits, allow only bounded raster
+PNG structures/checksums, and suppress image SQL parameter logging. Foreign-key cascade
+deletes attachments for thread/project/workspace deletion. Backups may retain deleted data.
+A future object-store adapter can replace this table's binary column behind Snapshots.
+
+Privacy filtering runs before cloning, including descendants; excluded nodes and controls
+are omitted rather than blurred. Shadow roots, slots, unsafe SVG subtrees, canvas/video
+and frames are omitted. Reviewers must inspect the preview: this cannot identify personal
+information in unmarked prose, images or CSS-generated content. No screenshot is inferred
+from an anchor or taken automatically later. Web-font scanning is disabled and image
+fetches omit credentials/referrers; this trades fidelity for a smaller capture surface.
+Requests allow 300 KiB only for snapshot JSON (base64 overhead), while ordinary JSON
+requests retain 32 KiB. Raster size is limited to 200 KiB and 1200 pixels per dimension.

@@ -252,7 +252,9 @@ Do not switch back after accepting new writes without migrating those new record
 Set up and test backups before production launch. Copying only an active `.db` file can
 omit committed data still in its WAL; use SQLite's backup facilities for a consistent copy.
 
-Request bodies are limited to 32 KiB. Avoid body/header logging at the proxy.
+Ordinary JSON request bodies are limited to 32 KiB; snapshot uploads allow 300 KiB
+(base64 transport for images up to 200 KiB). Kamal proxy permits the larger bound.
+Snapshots live in SQLite and are included in its existing backup/restore lifecycle. Avoid body/header logging at the proxy.
 The in-memory limiter remains single-instance. Behind a proxy, IP limits currently use
 the proxy transport IP; configure trusted-proxy handling before scaling.
 Validate HTTPS sign-in, project creation, another-origin embed, comment persistence,

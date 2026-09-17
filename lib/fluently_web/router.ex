@@ -27,6 +27,8 @@ defmodule FluentlyWeb.Router do
     pipe_through :demo
     get "/comments", DemoController, :index
     post "/comments", DemoController, :create
+    get "/comments/:thread_id/snapshot", DemoController, :snapshot
+    post "/comments/:thread_id/snapshot", DemoController, :attach_snapshot
     post "/comments/:thread_id/replies", DemoController, :reply
     patch "/comments/:thread_id", DemoController, :update
     delete "/comments/:thread_id/messages/:message_id", DemoController, :delete_message
@@ -58,6 +60,8 @@ defmodule FluentlyWeb.Router do
     get "/:id/comments", FeedbackAPIController, :index
     post "/:id/comments", FeedbackAPIController, :create
     get "/:id/comments/:thread_id", FeedbackAPIController, :show
+    get "/:id/comments/:thread_id/snapshot", FeedbackAPIController, :snapshot
+    post "/:id/comments/:thread_id/snapshot", FeedbackAPIController, :attach_snapshot
     post "/:id/comments/:thread_id/replies", FeedbackAPIController, :reply
     patch "/:id/comments/:thread_id", FeedbackAPIController, :update
     delete "/:id/comments/:thread_id/messages/:message_id", FeedbackAPIController, :delete_message

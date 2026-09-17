@@ -59,6 +59,29 @@ defmodule FluentlyWeb.FeedbackAPIController do
     end
   end
 
+  def snapshot(conn, %{"thread_id" => id}) do
+    with project when not is_nil(project) <- conn.assigns.project,
+         snapshot when not is_nil(snapshot) <- Fluently.Snapshots.get(project, id) do
+      json(conn, %{data: Fluently.Snapshots.serialize(snapshot)})
+    else
+      _ -> error(conn, 404, "Snapshot not found")
+    end
+  end
+
+  def attach_snapshot(conn, %{"thread_id" => id} = params) do
+    with project when not is_nil(project) <- conn.assigns.project,
+         {:ok, _} <-
+           Fluently.Snapshots.attach(project, conn.assigns.reviewer, id, params["data_url"]) do
+      json(conn, %{data: Threads.serialize(Threads.get(project, id), conn.assigns.reviewer)})
+    else
+      {:error, :invalid_image} ->
+        error(conn, 422, "Use a PNG up to 200 KiB and 1200 × 1200 pixels")
+
+      _ ->
+        error(conn, 404, "Comment not found or not yours")
+    end
+  end
+
   def reply(conn, %{"thread_id" => id} = params) do
     case Threads.reply(conn.assigns.project, conn.assigns.reviewer, id, params["body"]) do
       {:ok, _} -> show(conn, %{"thread_id" => id})

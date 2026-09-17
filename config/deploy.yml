@@ -19,7 +19,7 @@ proxy:
     interval: 2
     timeout: 3
   buffering:
-    max_request_body: 32768
+    max_request_body: 307200
 
 registry:
   server: <%= ENV.fetch("KAMAL_REGISTRY_SERVER", "ghcr.io").to_json %>

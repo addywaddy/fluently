@@ -274,4 +274,30 @@ defmodule FluentlyWeb.DemoTest do
            |> Map.fetch!("data")
            |> length() == 1
   end
+
+  test "demo snapshots follow the private cookie and survive signup" do
+    owner = visitor() |> post("/demo/comments", attrs())
+    thread = json_response(owner, 201)["data"]
+    path = "/demo/comments/#{thread["id"]}/snapshot"
+    data = %{data_url: Fluently.FeedbackFixtures.snapshot()}
+    assert visitor() |> get(path) |> json_response(404)
+    assert owner |> next() |> post(path, data) |> json_response(200)
+
+    assert owner |> next() |> get(path) |> json_response(200) |> get_in(["data", "data_url"]) ==
+             data.data_url
+
+    other = visitor() |> post("/demo/comments", attrs())
+    assert other |> next() |> get(path) |> json_response(404)
+    assert other |> next() |> post(path, data) |> json_response(404)
+
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      owner |> next() |> put_private(:plug_skip_csrf_protection, false) |> post(path, data)
+    end
+
+    saved = owner |> next() |> post("/signup", signup_attrs())
+    assert saved |> next() |> get(path) |> json_response(200)
+    account = Accounts.current(get_session(saved, :account_token))
+    assert {:ok, _} = Threads.delete(Accounts.demo_project(account), thread["id"])
+    assert saved |> next() |> get(path) |> json_response(404)
+  end
 end

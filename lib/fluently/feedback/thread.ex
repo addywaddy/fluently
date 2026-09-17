@@ -8,6 +8,7 @@ defmodule Fluently.Feedback.Thread do
     field :status, :string, default: "open"
     field :anchor, :map
     field :context, :map
+    has_one :snapshot, Fluently.Feedback.Snapshot
     has_many :messages, Fluently.Feedback.Message
     timestamps(type: :utc_datetime_usec)
   end

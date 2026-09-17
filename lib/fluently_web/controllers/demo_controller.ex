@@ -35,6 +35,36 @@ defmodule FluentlyWeb.DemoController do
     end
   end
 
+  def snapshot(conn, %{"thread_id" => id}) do
+    with project when not is_nil(project) <- Accounts.demo_project(conn.assigns.account),
+         snapshot when not is_nil(snapshot) <- Fluently.Snapshots.get(project, id) do
+      json(conn, %{data: Fluently.Snapshots.serialize(snapshot)})
+    else
+      _ -> error(conn, 404, "Snapshot not found")
+    end
+  end
+
+  def attach_snapshot(conn, %{"thread_id" => id} = params) do
+    with project when not is_nil(project) <- Accounts.demo_project(conn.assigns.account),
+         {:ok, _} <-
+           Fluently.Snapshots.attach(
+             project,
+             reviewer(conn.assigns.account),
+             id,
+             params["data_url"]
+           ) do
+      json(conn, %{
+        data: Threads.serialize(Threads.get(project, id), reviewer(conn.assigns.account))
+      })
+    else
+      {:error, :invalid_image} ->
+        error(conn, 422, "Use a PNG up to 200 KiB and 1200 × 1200 pixels")
+
+      _ ->
+        error(conn, 404, "Comment not found or not yours")
+    end
+  end
+
   def reply(conn, %{"thread_id" => id} = params) do
     with account when not is_nil(account) <- conn.assigns.account,
          project when not is_nil(project) <- Accounts.demo_project(account),
