@@ -20,6 +20,9 @@ configured project with `public_feedback=true`. Customer projects remain invite-
 default; a public project UUID is never an access credential. `/demo` keeps its URL for
 SDK compatibility but is a same-origin cookie/CSRF API with rate limiting. It canonicalizes
 landing feedback to the configured project's root URL; local address aliases remain supported.
+Production validates the browser Origin against the configured public HTTPS hostname,
+not the transport scheme/host/port of an individual reverse-proxied request. CSRF checks
+remain mandatory for writes; customer API exact-origin checks are unchanged.
 
 Anonymous accounts and reviewers are created on the first successful comment in one
 transaction. The separate `feedback_reviewer_id` preserves legacy private demo references

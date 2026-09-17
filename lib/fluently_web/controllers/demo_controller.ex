@@ -147,11 +147,14 @@ defmodule FluentlyWeb.DemoController do
   end
 
   defp request_origin(conn) do
-    conn
-    |> request_url()
-    |> URI.parse()
-    |> Map.merge(%{path: nil, query: nil, fragment: nil})
-    |> URI.to_string()
+    # Production terminates TLS at Kamal. Use the configured public origin,
+    # independent of the transport host/port presented by the reverse proxy.
+    Application.get_env(:fluently, :canonical_feedback_origin) ||
+      conn
+      |> request_url()
+      |> URI.parse()
+      |> Map.merge(%{path: nil, query: nil, fragment: nil})
+      |> URI.to_string()
   end
 
   defp reviewer(nil), do: nil

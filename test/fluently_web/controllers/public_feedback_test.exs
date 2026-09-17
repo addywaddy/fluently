@@ -256,4 +256,34 @@ defmodule FluentlyWeb.PublicFeedbackTest do
     assert comment() |> json_response(422)
     assert Repo.aggregate(Fluently.Accounts.Account, :count) == 0
   end
+
+  test "canonical public origin is independent of proxy transport and rejects foreign origins" do
+    previous = Application.get_env(:fluently, :canonical_feedback_origin)
+    Application.put_env(:fluently, :canonical_feedback_origin, "https://fluently.now")
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:fluently, :canonical_feedback_origin, previous),
+        else: Application.delete_env(:fluently, :canonical_feedback_origin)
+    end)
+
+    conn = %{visitor() | scheme: :http, host: "fluently.now", port: 4000}
+
+    saved =
+      conn |> put_req_header("origin", "https://fluently.now") |> post("/demo/comments", attrs())
+
+    assert json_response(saved, 201)["data"]["page"] == "https://fluently.now/"
+
+    for origin <- [
+          "https://evil.test",
+          "null",
+          "http://fluently.now",
+          "https://fluently.now.evil.test"
+        ] do
+      assert conn
+             |> put_req_header("origin", origin)
+             |> post("/demo/comments", attrs())
+             |> json_response(403)
+    end
+  end
 end
