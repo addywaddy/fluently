@@ -38,6 +38,8 @@ Run `mix assets.build` after editing `assets/embed/`; the normal development wat
 
 Commenting starts off. The circular logo is grayscale while off and blue while on; the toolbar slides out to its left, aligned with the logo. On narrow screens, swipe the toolbar horizontally to reach additional controls. Turning it off hides pins and tools and restores ordinary page interactions. While on, ordinary left-clicks still navigate unless toolbar element selection is active. Escape dismisses the context menu or cancels selection/a draft; when no such UI is open it turns commenting off. Clicking outside, scrolling or resizing dismisses the menu. Shift + right-click keeps the native browser menu; editable and excluded areas are never given a Fluently menu.
 
+In the thread panel, **Delete reply** removes one reply you wrote. **Delete thread** on your opening comment removes the entire conversation and pin, including replies, after explicit confirmation. Deletion is permanent.
+
 Guests share project-wide review access; there are no individual guest roles in V1. Signed review sessions last 24 hours and persist in sessionStorage for that tab. **Exit** clears the local session. Rotating project keys revokes all existing invitations/sessions and the old API key. Owner sessions last 12 hours.
 
 On customer websites, no invitation/session means no widget or feedback requests. Merely viewing the public snippet gives no read/write access. The host website must be trusted: its scripts can access same-page session storage. The SDK does not bypass host-site authentication.
@@ -113,6 +115,7 @@ curl -H "Authorization: Bearer $FLUENTLY_API_KEY" \
 - `POST /api/projects/:id/comments` — review session required; `{body, page, anchor, context}`.
 - `POST /api/projects/:id/comments/:thread_id/replies` — review session; `{body}`.
 - `PATCH /api/projects/:id/comments/:thread_id` — review session; `{status: "open" | "resolved"}`.
+- `DELETE /api/projects/:id/comments/:thread_id/messages/:message_id` — author’s review session required. Deleting the initial message deletes the thread and replies; deleting a reply preserves the thread. Returns `{deleted_thread: boolean, data: thread | null}`. Each message includes a caller-specific `can_delete` flag; read-only keys always receive false.
 
 Use `Authorization: Bearer …` for both read keys and signed review sessions. Lists return
 `{data: [...], next_offset: number | null}` in creation order, 100 threads per page.

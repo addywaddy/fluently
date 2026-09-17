@@ -215,6 +215,9 @@ if (project && !document.querySelector('fluently-feedback')) {
         const previous = selected && threads.find(t => t.id === selected)
         threads = all; renderPins()
         const current = selected && threads.find(t => t.id === selected)
+        if ((panelMode === 'thread' || panelMode === 'delete') && selected && !current) {
+          closePanel(); announce('This thread has been deleted.')
+        }
         if (panelMode === 'thread' && current && !panel.querySelector('textarea')?.value && JSON.stringify(previous) !== JSON.stringify(current)) showThread(current)
         if (panelMode === 'list') showList(false)
         if (report) announce('Feedback loaded.')
@@ -243,10 +246,11 @@ if (project && !document.querySelector('fluently-feedback')) {
     }
     function showThread(thread) {
       setArmed(false); openPanel('Comment thread', 'thread'); selected = thread.id
-      for (const message of thread.messages) {
+      for (const [index, message] of thread.messages.entries()) {
         const item = el('article', '', 'message')
         const time = el('time', new Date(message.created_at).toLocaleString()); time.dateTime = message.created_at
         item.append(el('strong', message.author.name), time, el('p', message.body)); panel.append(item)
+        if (message.can_delete) item.append(button(index === 0 ? 'Delete thread' : 'Delete reply', () => confirmDeletion(thread, message, index === 0)))
       }
       panel.append(el('p', `${thread.status} · ${thread.context.viewport.width} × ${thread.context.viewport.height} · target ${resolve(thread.anchor).state === 'resolved' ? 'found' : resolve(thread.anchor).state}`, 'muted'))
       const statusError = errorBox()
@@ -262,6 +266,34 @@ if (project && !document.querySelector('fluently-feedback')) {
         const result = await api(`/comments/${thread.id}/replies`, 'POST', {body})
         threads = threads.map(t => t.id === thread.id ? result.data : t); showThread(result.data)
       })
+    }
+    function confirmDeletion(thread, message, entireThread) {
+      openPanel(entireThread ? 'Delete this thread?' : 'Delete this reply?', 'delete')
+      selected = thread.id
+      panel.append(el('p', entireThread ? 'This permanently deletes the comment, all replies, and its pin. This cannot be undone.' : 'This permanently deletes your reply. The rest of the thread will remain. This cannot be undone.'))
+      const error = errorBox()
+      const cancel = button('Cancel', () => {
+        const current = threads.find(t => t.id === thread.id)
+        if (current) showThread(current); else closePanel()
+      })
+      const remove = button(entireThread ? 'Permanently delete thread' : 'Permanently delete reply', async () => {
+        if (busy) return
+        busy = true; remove.disabled = true; cancel.disabled = true; error.textContent = ''
+        try {
+          const result = await api(`/comments/${thread.id}/messages/${message.id}`, 'DELETE')
+          if (result.deleted_thread) {
+            threads = threads.filter(t => t.id !== thread.id); renderPins(); closePanel()
+            announce('Thread deleted.'); listButton.focus()
+          } else {
+            threads = threads.map(t => t.id === thread.id ? result.data : t)
+            renderPins(); showThread(result.data); announce('Reply deleted.')
+          }
+        } catch (e) { error.textContent = e.message || 'Could not delete. Please retry.' }
+        finally { busy = false; remove.disabled = false; cancel.disabled = false }
+      })
+      const actions = el('div', '', 'row'); actions.append(cancel, remove)
+      panel.append(el('div', message.body, 'message'), actions, error)
+      cancel.focus()
     }
     function messageForm(labelText, action) {
       const form = el('form'), label = el('label', labelText), input = el('textarea')

@@ -8,7 +8,7 @@ defmodule FluentlyWeb.DemoController do
     threads = if project, do: Threads.list(project, params), else: []
 
     json(conn, %{
-      data: Enum.map(threads, &Threads.serialize/1),
+      data: Enum.map(threads, &Threads.serialize(&1, reviewer(conn.assigns.account))),
       registered: registered?(conn.assigns.account),
       next_offset:
         if(length(threads) == 100, do: Threads.offset(params["offset"]) + 100, else: nil)
@@ -20,13 +20,15 @@ defmodule FluentlyWeb.DemoController do
     params = Map.put(params, "page", conn.assigns.template.origin <> "/")
 
     case Accounts.first_comment(conn.assigns.account, params) do
-      {:ok, %{token: token, thread: thread}} ->
+      {:ok, %{token: token, thread: thread, account: account}} ->
         conn =
           if token,
             do: conn |> configure_session(renew: true) |> put_session(:account_token, token),
             else: conn
 
-        conn |> put_status(201) |> json(%{data: Threads.serialize(thread)})
+        conn
+        |> put_status(201)
+        |> json(%{data: Threads.serialize(thread, Accounts.reviewer(account))})
 
       _ ->
         error(conn, 422, "Could not save your comment. Check the text or reload and try again.")
@@ -37,7 +39,7 @@ defmodule FluentlyWeb.DemoController do
     with account when not is_nil(account) <- conn.assigns.account,
          project when not is_nil(project) <- Accounts.demo_project(account),
          {:ok, _} <- Threads.reply(project, Accounts.reviewer(account), id, params["body"]) do
-      json(conn, %{data: Threads.serialize(Threads.get(project, id))})
+      json(conn, %{data: Threads.serialize(Threads.get(project, id), Accounts.reviewer(account))})
     else
       {:error, %Ecto.Changeset{}} -> error(conn, 422, "Write a reply of 1–4000 characters.")
       _ -> error(conn, 404, "Not found")
@@ -48,12 +50,33 @@ defmodule FluentlyWeb.DemoController do
     with account when not is_nil(account) <- conn.assigns.account,
          project when not is_nil(project) <- Accounts.demo_project(account),
          {:ok, _} <- Threads.status(project, id, params["status"]) do
-      json(conn, %{data: Threads.serialize(Threads.get(project, id))})
+      json(conn, %{data: Threads.serialize(Threads.get(project, id), Accounts.reviewer(account))})
     else
       {:error, :invalid_status} -> error(conn, 422, "Invalid status")
       _ -> error(conn, 404, "Not found")
     end
   end
+
+  def delete_message(conn, %{"thread_id" => id, "message_id" => message_id}) do
+    with account when not is_nil(account) <- conn.assigns.account,
+         project when not is_nil(project) <- Accounts.demo_project(account),
+         {:ok, result} <-
+           Threads.delete_message(project, Accounts.reviewer(account), id, message_id) do
+      json(conn, %{
+        deleted_thread: result.deleted_thread,
+        data:
+          if(result.thread,
+            do: Threads.serialize(result.thread, Accounts.reviewer(account)),
+            else: nil
+          )
+      })
+    else
+      _ -> error(conn, 404, "Comment not found or not yours to delete")
+    end
+  end
+
+  defp reviewer(nil), do: nil
+  defp reviewer(account), do: Accounts.reviewer(account)
 
   defp boundary(conn, _) do
     conn = put_resp_header(conn, "cache-control", "no-store")

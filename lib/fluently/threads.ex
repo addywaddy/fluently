@@ -69,26 +69,18 @@ defmodule Fluently.Threads do
   def create(_, _, _), do: {:error, :unauthorized}
 
   def reply(project, %Reviewer{project_id: pid} = reviewer, id, body) when pid == project.id do
-    case get(project, id) do
-      nil ->
-        {:error, :not_found}
+    Repo.transaction(fn ->
+      thread = locked_thread(project, id) || Repo.rollback(:not_found)
 
-      thread ->
-        Repo.transaction(fn ->
-          case add_message(thread, reviewer, body) do
-            {:ok, message} ->
-              Repo.update_all(
-                from(t in Thread, where: t.id == ^thread.id and t.project_id == ^project.id),
-                set: [updated_at: DateTime.utc_now()]
-              )
+      case add_message(thread, reviewer, body) do
+        {:ok, message} ->
+          thread |> change(updated_at: DateTime.utc_now()) |> Repo.update!()
+          message
 
-              message
-
-            {:error, error} ->
-              Repo.rollback(error)
-          end
-        end)
-    end
+        {:error, error} ->
+          Repo.rollback(error)
+      end
+    end)
   end
 
   def reply(_, _, _, _), do: {:error, :unauthorized}
@@ -109,7 +101,30 @@ defmodule Fluently.Threads do
     end
   end
 
-  def serialize(thread) do
+  def delete_message(project, %Reviewer{project_id: pid} = reviewer, thread_id, message_id)
+      when pid == project.id do
+    Repo.transaction(fn ->
+      with %Thread{} = thread <- locked_thread(project, thread_id),
+           thread = preload(thread),
+           %Message{} = message <- Enum.find(thread.messages, &(&1.id == message_id)),
+           true <- message.reviewer_id == reviewer.id do
+        if hd(thread.messages).id == message.id do
+          Repo.delete!(thread)
+          %{deleted_thread: true, thread: nil}
+        else
+          Repo.delete!(message)
+          thread = thread |> change(updated_at: DateTime.utc_now()) |> Repo.update!()
+          %{deleted_thread: false, thread: get(project, thread.id)}
+        end
+      else
+        _ -> Repo.rollback(:not_found)
+      end
+    end)
+  end
+
+  def delete_message(_, _, _, _), do: {:error, :unauthorized}
+
+  def serialize(thread, reviewer \\ nil) do
     %{
       id: thread.id,
       project_id: thread.project_id,
@@ -124,6 +139,9 @@ defmodule Fluently.Threads do
           %{
             id: m.id,
             body: m.body,
+            can_delete:
+              not is_nil(reviewer) and reviewer.project_id == thread.project_id and
+                reviewer.id == m.reviewer_id,
             created_at: m.inserted_at,
             author: %{id: m.reviewer.id, name: m.reviewer.name, kind: m.reviewer.kind}
           }
@@ -142,6 +160,18 @@ defmodule Fluently.Threads do
   end
 
   def page(_, _), do: {:error, :invalid_page}
+
+  defp locked_thread(project, id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, id} ->
+        Repo.one(
+          from t in Thread, where: t.project_id == ^project.id and t.id == ^id, lock: "FOR UPDATE"
+        )
+
+      _ ->
+        nil
+    end
+  end
 
   defp add_message(thread, reviewer, body) do
     %Message{thread_id: thread.id, reviewer_id: reviewer.id}

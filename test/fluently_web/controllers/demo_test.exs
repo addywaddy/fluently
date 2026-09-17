@@ -231,4 +231,47 @@ defmodule FluentlyWeb.DemoTest do
     Application.delete_env(:fluently, :dogfood_project_id)
     assert visitor() |> post("/demo/comments", attrs()) |> json_response(404)
   end
+
+  test "private-demo deletion preserves visitor isolation and works after signup" do
+    owner = visitor() |> post("/demo/comments", attrs())
+    thread = json_response(owner, 201)["data"]
+    message = hd(thread["messages"])
+    assert message["can_delete"]
+    path = "/demo/comments/#{thread["id"]}/messages/#{message["id"]}"
+    other = visitor() |> post("/demo/comments", attrs())
+    assert other |> next() |> delete(path) |> json_response(404)
+    assert visitor() |> delete(path) |> json_response(404)
+
+    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+      owner |> next() |> put_private(:plug_skip_csrf_protection, false) |> delete(path)
+    end
+
+    replied =
+      owner
+      |> next()
+      |> post("/demo/comments/#{thread["id"]}/replies", %{body: "Remove this reply"})
+
+    reply = json_response(replied, 200)["data"]["messages"] |> List.last()
+
+    result =
+      owner
+      |> next()
+      |> delete("/demo/comments/#{thread["id"]}/messages/#{reply["id"]}")
+      |> json_response(200)
+
+    refute result["deleted_thread"]
+    assert length(result["data"]["messages"]) == 1
+    saved = owner |> next() |> post("/signup", signup_attrs())
+    assert saved |> next() |> delete(path) |> json_response(200) |> Map.fetch!("deleted_thread")
+
+    assert saved |> next() |> get("/demo/comments") |> json_response(200) |> Map.fetch!("data") ==
+             []
+
+    assert other
+           |> next()
+           |> get("/demo/comments")
+           |> json_response(200)
+           |> Map.fetch!("data")
+           |> length() == 1
+  end
 end

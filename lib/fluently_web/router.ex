@@ -27,6 +27,7 @@ defmodule FluentlyWeb.Router do
     post "/comments", DemoController, :create
     post "/comments/:thread_id/replies", DemoController, :reply
     patch "/comments/:thread_id", DemoController, :update
+    delete "/comments/:thread_id/messages/:message_id", DemoController, :delete_message
   end
 
   scope "/", FluentlyWeb do
@@ -57,6 +58,7 @@ defmodule FluentlyWeb.Router do
     get "/:id/comments/:thread_id", FeedbackAPIController, :show
     post "/:id/comments/:thread_id/replies", FeedbackAPIController, :reply
     patch "/:id/comments/:thread_id", FeedbackAPIController, :update
+    delete "/:id/comments/:thread_id/messages/:message_id", FeedbackAPIController, :delete_message
   end
 
   # Other scopes may use custom stacks.

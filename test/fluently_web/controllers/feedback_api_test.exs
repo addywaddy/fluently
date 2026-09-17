@@ -113,4 +113,79 @@ defmodule FluentlyWeb.FeedbackAPITest do
     assert api(ctx.token) |> post(ctx.path <> "/comments", %{}) |> json_response(429)
     assert api(ctx.token) |> get(ctx.path <> "/comments") |> json_response(200)
   end
+
+  test "authors can delete replies and their threads, with project-scoped authorization", ctx do
+    thread =
+      api(ctx.token)
+      |> post(ctx.path <> "/comments", Fluently.FeedbackFixtures.attrs())
+      |> json_response(201)
+      |> Map.fetch!("data")
+
+    first = hd(thread["messages"])
+    assert first["can_delete"]
+    path = ctx.path <> "/comments/#{thread["id"]}/messages/#{first["id"]}"
+    {:ok, other_token, _} = Feedback.start_review(ctx.project, ctx.keys.review, "Other guest")
+    view = api(other_token) |> get(ctx.path <> "/comments/#{thread["id"]}") |> json_response(200)
+    refute hd(view["data"]["messages"])["can_delete"]
+    assert api(other_token) |> delete(path) |> json_response(404)
+    assert api(ctx.keys.api) |> delete(path) |> json_response(403)
+    assert build_conn() |> delete(path) |> json_response(401)
+    assert api(ctx.token, "https://evil.test") |> delete(path) |> json_response(403)
+
+    replied =
+      api(other_token)
+      |> post(ctx.path <> "/comments/#{thread["id"]}/replies", %{body: "My reply"})
+      |> json_response(200)
+
+    reply = List.last(replied["data"]["messages"])
+    assert reply["can_delete"]
+    reply_path = ctx.path <> "/comments/#{thread["id"]}/messages/#{reply["id"]}"
+    assert api(ctx.token) |> delete(reply_path) |> json_response(404)
+    result = api(other_token) |> delete(reply_path) |> json_response(200)
+    refute result["deleted_thread"]
+    assert length(result["data"]["messages"]) == 1
+    assert api(other_token) |> delete(reply_path) |> json_response(404)
+
+    replied =
+      api(other_token)
+      |> post(ctx.path <> "/comments/#{thread["id"]}/replies", %{body: "Another reply"})
+      |> json_response(200)
+
+    remaining_reply = List.last(replied["data"]["messages"])
+    result = api(ctx.token) |> delete(path) |> json_response(200)
+    assert result["deleted_thread"]
+    assert is_nil(result["data"])
+    assert api(ctx.token) |> get(ctx.path <> "/comments/#{thread["id"]}") |> json_response(404)
+    assert is_nil(Fluently.Repo.get(Fluently.Feedback.Message, remaining_reply["id"]))
+    assert api(ctx.token) |> delete(path) |> json_response(404)
+  end
+
+  test "message deletion rejects mismatched threads and project credentials", ctx do
+    {:ok, one} =
+      Fluently.Threads.create(ctx.project, ctx.reviewer, Fluently.FeedbackFixtures.attrs())
+
+    {:ok, two} =
+      Fluently.Threads.create(ctx.project, ctx.reviewer, Fluently.FeedbackFixtures.attrs())
+
+    path = ctx.path <> "/comments/#{two.id}/messages/#{hd(one.messages).id}"
+    assert api(ctx.token) |> delete(path) |> json_response(404)
+
+    assert api(ctx.token)
+           |> delete(ctx.path <> "/comments/invalid/messages/invalid")
+           |> json_response(404)
+
+    {:ok, owner, _} = Feedback.create_workspace("Another tenant")
+
+    {:ok, project, keys} =
+      Feedback.create_project(owner, %{"name" => "Other", "origin" => "https://example.com"})
+
+    {:ok, token, _} = Feedback.start_review(project, keys.review, "Other tenant")
+
+    assert api(token)
+           |> delete(ctx.path <> "/comments/#{one.id}/messages/#{hd(one.messages).id}")
+           |> json_response(401)
+
+    assert Fluently.Threads.get(ctx.project, one.id)
+    assert Fluently.Threads.get(ctx.project, two.id)
+  end
 end

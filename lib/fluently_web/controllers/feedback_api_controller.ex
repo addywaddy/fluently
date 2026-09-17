@@ -33,7 +33,7 @@ defmodule FluentlyWeb.FeedbackAPIController do
       threads = Threads.list(conn.assigns.project, params)
 
       json(conn, %{
-        data: Enum.map(threads, &Threads.serialize/1),
+        data: Enum.map(threads, &Threads.serialize(&1, conn.assigns.reviewer)),
         next_offset:
           if(length(threads) == 100, do: Threads.offset(params["offset"]) + 100, else: nil)
       })
@@ -45,14 +45,17 @@ defmodule FluentlyWeb.FeedbackAPIController do
   def show(conn, %{"thread_id" => id}) do
     case Threads.get(conn.assigns.project, id) do
       nil -> error(conn, 404, "Not found")
-      thread -> json(conn, %{data: Threads.serialize(thread)})
+      thread -> json(conn, %{data: Threads.serialize(thread, conn.assigns.reviewer)})
     end
   end
 
   def create(conn, params) do
     case Threads.create(conn.assigns.project, conn.assigns.reviewer, params) do
-      {:ok, thread} -> conn |> put_status(201) |> json(%{data: Threads.serialize(thread)})
-      _ -> error(conn, 422, "Invalid comment, page, anchor or context")
+      {:ok, thread} ->
+        conn |> put_status(201) |> json(%{data: Threads.serialize(thread, conn.assigns.reviewer)})
+
+      _ ->
+        error(conn, 422, "Invalid comment, page, anchor or context")
     end
   end
 
@@ -69,6 +72,23 @@ defmodule FluentlyWeb.FeedbackAPIController do
       {:ok, _} -> show(conn, %{"thread_id" => id})
       {:error, :not_found} -> error(conn, 404, "Not found")
       _ -> error(conn, 422, "status must be open or resolved")
+    end
+  end
+
+  def delete_message(conn, %{"thread_id" => id, "message_id" => message_id}) do
+    case Threads.delete_message(conn.assigns.project, conn.assigns.reviewer, id, message_id) do
+      {:ok, result} ->
+        json(conn, %{
+          deleted_thread: result.deleted_thread,
+          data:
+            if(result.thread,
+              do: Threads.serialize(result.thread, conn.assigns.reviewer),
+              else: nil
+            )
+        })
+
+      _ ->
+        error(conn, 404, "Comment not found or not yours to delete")
     end
   end
 
@@ -94,7 +114,7 @@ defmodule FluentlyWeb.FeedbackAPIController do
         else
           conn
           |> put_resp_header("access-control-allow-origin", project.origin)
-          |> put_resp_header("access-control-allow-methods", "GET, POST, PATCH, OPTIONS")
+          |> put_resp_header("access-control-allow-methods", "GET, POST, PATCH, DELETE, OPTIONS")
           |> put_resp_header("access-control-allow-headers", "authorization, content-type")
           |> put_resp_header("access-control-max-age", "600")
         end
