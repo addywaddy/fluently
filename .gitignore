@@ -54,3 +54,8 @@ npm-debug.log
 # SQLite database, WAL, shared memory, and local migration exports
 /data/
 *.db-*
+
+.kamal/secrets
+.kamal/secrets-*
+.kamal/secrets.*
+!.kamal/secrets.example

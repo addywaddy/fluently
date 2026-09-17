@@ -139,7 +139,7 @@ The public project ID never grants access to a private demo or customer project.
 `Fluently.Threads` owns scoped conversations; `Fluently.Feedback.Anchor` validates context.
 `assets/embed/anchor.mjs` handles DOM capture/resolution independently of widget UI.
 No MCP, screenshots, billing or agent execution is included. Decisions: [docs/architecture.md](docs/architecture.md).
-Release instructions: [docs/deployment.md](docs/deployment.md). Use a single app instance for the pilot’s in-memory rate limiter.
+Kamal and release instructions: [docs/deployment.md](docs/deployment.md). Use a single app instance for the pilot’s in-memory rate limiter.
 
 A separate-origin test host is in `test/fixtures/host/index.html`. Copy it to a temporary directory,
 replace `__PROJECT_ID__` with a project configured for `http://localhost:4100`, then serve that directory

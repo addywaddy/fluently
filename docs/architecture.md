@@ -63,3 +63,18 @@ the old PostgreSQL database remains untouched for rollback.
 Deploy one application instance on persistent local storage. SQLite is not a shared-disk
 clustering solution. Litestream is the intended backup approach but is deferred at the
 user's request; no automated remote backup or restore is configured yet.
+
+## Kamal deployment (2026-09-17)
+
+Use Kamal 2 to deploy the existing Docker image containing a Mix release. This keeps
+Elixir's standard runtime packaging and provides SSH-based deployment, registry builds,
+HTTPS and health-gated routing without maintaining our own systemd deployment scripts.
+Ruby/Kamal run on the operator's machine, not in the application image.
+
+One configured server mounts the named `fluently_data` volume. New containers run
+migrations before starting Phoenix, then `/up` checks database connectivity before
+Kamal routes traffic. Rolling deployments briefly overlap two releases on the same
+host/volume; SQLite serializes writes, but both releases must understand the schema.
+Only backward-compatible migrations belong in normal rolling deploys. Destructive
+changes require maintenance downtime and a tested backup. Rate limiting remains
+per-process during this brief overlap. Rollback changes the image, not database state.

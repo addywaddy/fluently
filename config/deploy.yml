@@ -1,0 +1,51 @@
+# Kamal 2.12+. Export deployment settings in your shell; secrets are read separately.
+service: fluently
+image: <%= ENV.fetch("FLUENTLY_IMAGE").to_json %>
+minimum_version: 2.12.0
+
+servers:
+  web:
+    hosts:
+      - <%= ENV.fetch("FLUENTLY_SERVER").to_json %>
+    cmd: /app/bin/deploy-server
+
+proxy:
+  ssl: true
+  host: <%= ENV.fetch("PHX_HOST").to_json %>
+  app_port: 4000
+  forward_headers: true
+  healthcheck:
+    path: /up
+    interval: 2
+    timeout: 3
+  buffering:
+    max_request_body: 32768
+
+registry:
+  server: <%= ENV.fetch("KAMAL_REGISTRY_SERVER", "ghcr.io").to_json %>
+  username: <%= ENV.fetch("KAMAL_REGISTRY_USERNAME").to_json %>
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: <%= ENV.fetch("FLUENTLY_ARCH", "amd64").to_json %>
+
+ssh:
+  user: <%= ENV.fetch("FLUENTLY_SSH_USER", "root").to_json %>
+
+volumes:
+  - fluently_data:/data
+
+env:
+  clear:
+    DATABASE_PATH: /data/fluently.db
+    PHX_HOST: <%= ENV.fetch("PHX_HOST").to_json %>
+    PORT: "4000"
+    POOL_SIZE: "5"
+<% if ENV["FLUENTLY_PROJECT_ID"] && !ENV["FLUENTLY_PROJECT_ID"].empty? %>
+    FLUENTLY_PROJECT_ID: <%= ENV.fetch("FLUENTLY_PROJECT_ID").to_json %>
+<% end %>
+  secret:
+    - SECRET_KEY_BASE
+
+deploy_timeout: 90

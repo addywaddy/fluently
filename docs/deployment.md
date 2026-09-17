@@ -4,6 +4,68 @@ One Phoenix instance with SQLite on persistent local storage. A hosting destinat
 not configured. Litestream is the intended backup approach but is deferred; automated
 remote backups and restore are not configured yet.
 
+## Kamal (recommended)
+
+The repository includes `config/deploy.yml` for **Kamal 2.12+** and the existing Phoenix
+Docker release. Install Kamal on your workstation (`gem install kamal -v 2.12.0`);
+Ruby is only a deployment tool dependency. Docker must be running locally to build.
+
+Prepare one Linux server with SSH access, ports 80/443 available, and your domain's DNS
+pointing to it. Default architecture is amd64; set `FLUENTLY_ARCH=arm64` for an ARM server.
+Create a private image repository (default registry: GHCR) and registry credentials.
+Export these non-secret settings in your shell (or source an ignored deployment env file):
+
+```sh
+export FLUENTLY_SERVER=your-server-ip
+export PHX_HOST=feedback.your-domain.com
+export FLUENTLY_IMAGE=your-registry-user/fluently
+export KAMAL_REGISTRY_USERNAME=your-registry-user
+# Optional: KAMAL_REGISTRY_SERVER, FLUENTLY_ARCH, FLUENTLY_SSH_USER (default root)
+cp .kamal/secrets.example .kamal/secrets
+```
+
+Provide `KAMAL_REGISTRY_PASSWORD` and `SECRET_KEY_BASE` through your shell/password manager,
+or edit the ignored `.kamal/secrets`. Generate the latter once with `mix phx.gen.secret`
+and retain it across deployments. Never commit either credential. Deployment settings
+used by ERB belong in the shell environment, not only in `.kamal/secrets`.
+
+```sh
+kamal setup                 # first deployment: prepares host, builds and starts app
+kamal deploy                # subsequent deployments
+kamal app logs
+```
+
+Kamal builds from committed files: commit changes before deploying. `kamal config`
+validates the configuration locally, but can display secrets; do not share its output.
+No server has been contacted or provisioned by this repository setup.
+
+Kamal mounts **`fluently_data:/data`**, runs migrations before Phoenix starts, and checks
+`/up` before switching traffic. The fresh volume inherits the image's writable `/data`
+permissions. Keep this volume across deployments; do not delete it or scale this config
+to multiple servers. The HTTP health route is excluded from SSL redirection; all normal
+routes retain HTTPS enforcement. Kamal terminates TLS and forwards the scheme; do not
+publish port 4000 directly to the internet.
+
+Normal rolling deployments briefly run old/new versions on the same database. Use only
+backward-compatible migrations. For an incompatible migration, stop the app first with
+`kamal app stop`, then deploy during a maintenance window. A failed migration prevents
+that container from becoming healthy. `kamal rollback VERSION` rolls back the application
+image only; it does not undo migrations or restore deleted data.
+
+After initial deployment, sign up and create projects through `/app`. To enable the
+landing demo, create a project for the production HTTPS origin, export its public UUID
+as `FLUENTLY_PROJECT_ID`, and deploy again. Local demo data is not uploaded automatically.
+Litestream remains deferred.
+
+References: [Kamal configuration](https://kamal-deploy.org/docs/configuration/overview/),
+[proxy and health checks](https://kamal-deploy.org/docs/configuration/proxy/),
+[Phoenix releases](https://phoenix.hexdocs.pm/Mix.Tasks.Phx.Gen.Release.html).
+
+## Manual Docker deployment
+
+The following is an alternative to Kamal, not an additional setup step. It uses a
+different example volume name; never mix the two workflows for the same installation.
+
 ## Build and configuration
 
 ```sh

@@ -1,6 +1,8 @@
 defmodule FluentlyWeb.Router do
   use FluentlyWeb, :router
 
+  get "/up", FluentlyWeb.HealthController, :show
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session

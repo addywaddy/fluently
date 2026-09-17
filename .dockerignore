@@ -54,3 +54,5 @@ designs
 # SQLite database, WAL, shared memory, and local migration exports
 /data/
 *.db-*
+
+.kamal
