@@ -1,5 +1,5 @@
 defmodule Fluently.Accounts do
-  @moduledoc "Private demo identities, upgraded in place at registration."
+  @moduledoc "Guest feedback identities, upgraded in place at registration; legacy demos stay private."
   import Ecto.Query
   import Ecto.Changeset
   alias Fluently.{Repo, Feedback, Threads}
@@ -19,8 +19,19 @@ defmodule Fluently.Accounts do
   def current(_), do: nil
 
   def demo_enabled?, do: Application.get_env(:fluently, :demo_enabled, true)
-  def demo_project(nil), do: nil
-  def demo_project(account), do: Feedback.project(account.demo_project_id)
+
+  def public_project do
+    case Feedback.project(Application.get_env(:fluently, :feedback_project_id)) do
+      %{public_feedback: true} = project -> project
+      _ -> nil
+    end
+  end
+
+  def demo_project(account) do
+    if Application.get_env(:fluently, :feedback_project_id),
+      do: public_project(),
+      else: if(account, do: Feedback.project(account.demo_project_id), else: nil)
+  end
 
   def first_comment(account, attrs, origin) do
     Repo.transaction(fn ->
@@ -35,7 +46,16 @@ defmodule Fluently.Accounts do
     end)
   end
 
-  def reviewer(account), do: Repo.get(Reviewer, account.reviewer_id)
+  def reviewer(nil), do: nil
+
+  def reviewer(account) do
+    id =
+      if Application.get_env(:fluently, :feedback_project_id),
+        do: account.feedback_reviewer_id,
+        else: account.reviewer_id
+
+    if id, do: Repo.get(Reviewer, id)
+  end
 
   def register(account, attrs) do
     # Hash outside the transaction; the writer only stays reserved for database work.
@@ -65,8 +85,8 @@ defmodule Fluently.Accounts do
         |> change(name: account.name <> "’s workspace")
         |> Repo.update!()
 
-        if account.reviewer_id do
-          reviewer(account) |> change(name: account.name, kind: "account") |> Repo.update!()
+        for id <- [account.reviewer_id, account.feedback_reviewer_id], not is_nil(id) do
+          Repo.get!(Reviewer, id) |> change(name: account.name, kind: "account") |> Repo.update!()
         end
 
         {account, token}
@@ -147,6 +167,29 @@ defmodule Fluently.Accounts do
   end
 
   defp ensure_demo!(account, origin) do
+    if Application.get_env(:fluently, :feedback_project_id) do
+      project = public_project() || Repo.rollback(:unavailable)
+      reviewer = reviewer(account)
+
+      if reviewer && reviewer.project_id == project.id do
+        {account, project, reviewer}
+      else
+        reviewer =
+          Repo.insert!(%Reviewer{
+            project_id: project.id,
+            name: account.name || "Visitor",
+            kind: if(account.email, do: "account", else: "anonymous")
+          })
+
+        account = account |> change(feedback_reviewer_id: reviewer.id) |> Repo.update!()
+        {account, project, reviewer}
+      end
+    else
+      ensure_private_demo!(account, origin)
+    end
+  end
+
+  defp ensure_private_demo!(account, origin) do
     case demo_project(account) do
       nil ->
         project =

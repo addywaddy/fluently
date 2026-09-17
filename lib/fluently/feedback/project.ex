@@ -3,6 +3,7 @@ defmodule Fluently.Feedback.Project do
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "projects" do
     field :workspace_id, Ecto.UUID
+    field :public_feedback, :boolean, default: false
     field :name, :string
     field :origin, :string
     field :review_hash, :binary

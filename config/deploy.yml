@@ -46,6 +46,7 @@ env:
     SENTRY_DSN: <%= ENV.fetch("SENTRY_DSN").to_json %>
 <% end %>
     MAIL_FROM: <%= ENV.fetch("MAIL_FROM", "hello@fluently.now").to_json %>
+    FLUENTLY_PROJECT_ID: <%= ENV.fetch("FLUENTLY_PROJECT_ID", "bfef5446-e12f-40d1-96db-dced5bf805e1").to_json %>
     FLUENTLY_DEMO_ENABLED: <%= ENV.fetch("FLUENTLY_DEMO_ENABLED", "true").to_json %>
   secret:
     - SECRET_KEY_BASE

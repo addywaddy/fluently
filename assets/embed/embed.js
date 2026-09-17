@@ -84,7 +84,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     const exit = button('Exit', () => { try { sessionStorage.removeItem(storageKey) } catch {} ; token = null; cleanup() })
     controls.append(addButton, listButton, exit)
     bar.append(controls, toggle)
-    const saveDemo = el('a', 'Save my demo')
+    const saveDemo = el('a', 'Keep access')
     if (demo) {
       saveDemo.href = '/signup'; saveDemo.style.cssText = 'color:#1c597c;padding:8px'
       controls.append(saveDemo)
@@ -268,7 +268,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       select.value = filter
       select.addEventListener('change', () => {filter = select.value; renderPins(); showList()})
       panel.append(select, el('p', 'Pins are hidden when their target is absent, ambiguous, excluded, or outside this view.', 'muted'))
-      if (demo) panel.append(el('p', 'Your private demo. Other visitors cannot see these comments. Unsaved demos expire after 14 days; clearing cookies loses access. Sign up to keep yours.', 'muted'))
+      if (demo) panel.append(el('p', 'Feedback goes to the Fluently team. You see only your own conversations. Sign up to keep access; clearing cookies or letting your guest session expire loses access.', 'muted'))
       const matching = threads.filter(t => t.status === filter)
       if (!matching.length) panel.append(el('p', 'No threads yet. Add a comment to an element on this page.'))
       for (const [i, thread] of matching.entries()) {
@@ -369,7 +369,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       setArmed(false); openPanel('New comment', 'draft'); draft = {anchor, context: snapshot.context, page: snapshot.page}
       selectedAnchor = anchor; restoreOutline()
       panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
-      if (demo) panel.append(el('p', 'Only you can see your demo comments. We remember you with a cookie. Sign up to keep them; unsaved demos expire after 14 days.', 'muted'))
+      if (demo) panel.append(el('p', 'Share feedback with the Fluently team. Other visitors cannot see your comments. We remember you with a cookie; sign up to keep access.', 'muted'))
       if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
       let image = null, capturing = false
       const snapshotBox = el('div'), preview = el('div'), snapshotError = errorBox()

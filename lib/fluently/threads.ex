@@ -5,7 +5,15 @@ defmodule Fluently.Threads do
   alias Fluently.Repo
   alias Fluently.Feedback.{Thread, Message, Anchor, Reviewer}
 
-  def list(project, params) do
+  # :all is an internal capability, never accepted from request parameters.
+  def visible?(project, id, scope) do
+    case get(project, id) do
+      nil -> false
+      thread -> scope == :all or thread.reviewer_id == scope
+    end
+  end
+
+  def list(project, params, scope \\ :all) do
     query =
       from t in Thread,
         where: t.project_id == ^project.id,
@@ -18,6 +26,13 @@ defmodule Fluently.Threads do
 
     query =
       if is_binary(params["page"]), do: where(query, [t], t.page == ^params["page"]), else: query
+
+    query =
+      case scope do
+        :all -> query
+        :none -> where(query, [t], false)
+        id -> where(query, [t], t.reviewer_id == ^id)
+      end
 
     offset = offset(params["offset"])
     query |> limit(100) |> offset(^offset) |> Repo.all() |> preload()

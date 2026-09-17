@@ -5,6 +5,7 @@ defmodule Fluently.Accounts.Account do
     field :workspace_id, Ecto.UUID
     field :demo_project_id, Ecto.UUID
     field :reviewer_id, Ecto.UUID
+    field :feedback_reviewer_id, Ecto.UUID
     field :email, :string
     field :name, :string
     field :password, :string, virtual: true, redact: true

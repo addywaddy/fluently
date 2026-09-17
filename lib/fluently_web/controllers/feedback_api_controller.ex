@@ -4,6 +4,8 @@ defmodule FluentlyWeb.FeedbackAPIController do
   plug :project_boundary
   plug :authenticate when action not in [:options, :session]
 
+  plug :thread_boundary when action not in [:options, :session]
+
   def options(conn, _), do: send_resp(conn, 204, "")
 
   def session(conn, params) do
@@ -30,7 +32,7 @@ defmodule FluentlyWeb.FeedbackAPIController do
 
   def index(conn, params) do
     if is_nil(params["status"]) or params["status"] in ["open", "resolved"] do
-      threads = Threads.list(conn.assigns.project, params)
+      threads = Threads.list(conn.assigns.project, params, scope(conn))
 
       json(conn, %{
         data: Enum.map(threads, &Threads.serialize(&1, conn.assigns.reviewer)),
@@ -175,6 +177,19 @@ defmodule FluentlyWeb.FeedbackAPIController do
         {:ok, reviewer} = result
         assign(conn, :reviewer, reviewer)
     end
+  end
+
+  defp scope(conn) do
+    if conn.assigns.project.public_feedback && conn.assigns.reviewer,
+      do: conn.assigns.reviewer.id,
+      else: :all
+  end
+
+  defp thread_boundary(conn, _) do
+    if conn.params["thread_id"] &&
+         not Threads.visible?(conn.assigns.project, conn.params["thread_id"], scope(conn)),
+       do: conn |> error(404, "Not found") |> halt(),
+       else: conn
   end
 
   defp error(conn, status, message),

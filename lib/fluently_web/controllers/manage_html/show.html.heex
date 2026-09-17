@@ -1,38 +1,70 @@
 <main class="manage">
   <a href={~p"/app"}>← Projects</a>
   <h1>{@project.name}</h1><p>{@project.origin}</p>
-  <h2>1. Install the snippet</h2>
-  <p>Add this to your website. The project ID is public and does not grant access.</p>
-  <pre>{"<script defer src=\"#{@service_url}/embed.js\" data-project=\"#{@project.id}\"></script>"}</pre>
-  <h2>2. Invite reviewers</h2>
-  <%= if @credentials do %>
-    <p>
-      Save these credentials now. They are shown only once. Anyone with the review link can read, comment and resolve threads in this project until {Calendar.strftime(
-        @project.review_expires_at,
-        "%Y-%m-%d %H:%M UTC"
-      )}.
+  <section :if={@owner}>
+    <p :if={@project.public_feedback}>
+      Public feedback is enabled for this first-party project. The landing page already includes its cookie-based widget. Invitation sessions below see only threads they started; sign in as an owner or admin to review all feedback.
     </p>
+    <h2>1. Install the snippet</h2>
+    <p>Add this to your website. The project ID is public and does not grant access.</p>
+    <pre>{"<script defer src=\"#{@service_url}/embed.js\" data-project=\"#{@project.id}\"></script>"}</pre>
+    <h2>2. Invite reviewers</h2>
+    <%= if @credentials do %>
+      <p>
+        Save these credentials now. They are shown only once. Anyone with the review link can read, comment and resolve threads in this project until {Calendar.strftime(
+          @project.review_expires_at,
+          "%Y-%m-%d %H:%M UTC"
+        )}.
+      </p>
+      <p>
+        <a
+          href={@project.origin <> "/#fluently=" <> @credentials.review}
+          rel="noreferrer"
+          target="_blank"
+        >Open review link ↗</a>
+      </p>
+      <pre>{@project.origin <> "/#fluently=" <> @credentials.review}</pre>
+      <h3>Read-only API key</h3><p>
+        Keep this server-side. Do not put it in your website snippet.
+      </p><pre>{@credentials.api}</pre>
+    <% else %>
+      <p>
+        Use your saved review link, or rotate credentials below to issue a new link and API key.
+      </p>
+    <% end %>
     <p>
-      <a
-        href={@project.origin <> "/#fluently=" <> @credentials.review}
-        rel="noreferrer"
-        target="_blank"
-      >Open review link ↗</a>
+      Guests enter a display name. Sessions last up to 24 hours; review links expire after 14 days. To review a specific page, keep the fragment and replace the path before it.
     </p>
-    <pre>{@project.origin <> "/#fluently=" <> @credentials.review}</pre>
-    <h3>Read-only API key</h3><p>Keep this server-side. Do not put it in your website snippet.</p><pre>{@credentials.api}</pre>
-  <% else %>
+    <.form for={@form} action={~p"/app/projects/#{@project.id}/rotate"} id="rotate-credentials">
+      <button class="button">Rotate keys and revoke all review sessions</button>
+    </.form>
+    <h2>Project admins</h2>
     <p>
-      Use your saved review link, or rotate credentials below to issue a new link and API key.
+      Admins can read all feedback, reply, resolve and delete threads. Only you can manage access and credentials.
     </p>
-  <% end %>
-  <p>
-    Guests enter a display name. Sessions last up to 24 hours; review links expire after 14 days. To review a specific page, keep the fragment and replace the path before it.
-  </p>
-  <.form for={@form} action={~p"/app/projects/#{@project.id}/rotate"} id="rotate-credentials">
-    <button class="button">Rotate keys and revoke all review sessions</button>
-  </.form>
+    <.form for={@form} action={~p"/app/projects/#{@project.id}/admins"} id="grant-admin">
+      <.input
+        field={@form[:email]}
+        type="email"
+        label="Existing account email"
+        required
+        class="manage-input"
+      />
+      <button class="button">Add admin</button>
+    </.form>
+    <.form
+      :for={admin <- @admins}
+      for={@form}
+      action={~p"/app/projects/#{@project.id}/admins/#{admin.id}/delete"}
+      id={"revoke-admin-#{admin.id}"}
+    >
+      <p>{admin.name} ({admin.email})</p><button class="button">Remove admin</button>
+    </.form>
+  </section>
   <h2>Feedback</h2>
+  <p :if={@project.public_feedback}>
+    Visitors see only their own conversations. You and project admins see all feedback here.
+  </p>
   <p :if={@threads == []}>
     No feedback yet. Install the snippet, open the review link and pin your first comment.
   </p>
@@ -42,6 +74,40 @@
     <p :for={message <- thread.messages}>
       <strong>{message.reviewer.name}:</strong> {message.body}
     </p>
+    <img
+      :if={thread.snapshot}
+      src={~p"/app/projects/#{@project.id}/threads/#{thread.id}/snapshot"}
+      alt="Element snapshot"
+      style="max-width: 100%; height: auto;"
+    />
+    <.form
+      for={@form}
+      action={~p"/app/projects/#{@project.id}/threads/#{thread.id}/replies"}
+      id={"reply-#{thread.id}"}
+    >
+      <.input
+        field={@form[:body]}
+        id={"reply-body-#{thread.id}"}
+        type="textarea"
+        label="Reply"
+        required
+        maxlength="4000"
+        class="manage-input"
+      />
+      <button class="button">Send reply</button>
+    </.form>
+    <.form
+      for={@form}
+      action={~p"/app/projects/#{@project.id}/threads/#{thread.id}/status"}
+      id={"status-#{thread.id}"}
+    >
+      <input
+        type="hidden"
+        name="status"
+        value={if thread.status == "open", do: "resolved", else: "open"}
+      />
+      <button class="button">{if thread.status == "open", do: "Resolve", else: "Reopen"}</button>
+    </.form>
     <details>
       <summary>Structured context</summary><pre>{Jason.encode!(%{anchor: thread.anchor, context: thread.context}, pretty: true)}</pre>
     </details>
@@ -53,16 +119,20 @@
       <button class="button">Delete thread permanently</button>
     </.form>
   </article>
-  <h2>Delete project</h2><p>
-    Deletes all project feedback and reviewers permanently. Type “delete” to confirm.
-  </p>
-  <.form for={@form} action={~p"/app/projects/#{@project.id}/delete"} id="delete-project">
-    <.input
-      field={@form[:confirm]}
-      label="Confirmation"
-      required
-      pattern="delete"
-      class="manage-input"
-    /><button class="button">Delete project</button>
-  </.form>
+  <a :if={@offset > 0} href={~p"/app/projects/#{@project.id}?offset=#{max(0, @offset - 100)}"}>Previous feedback</a>
+  <a :if={length(@threads) == 100} href={~p"/app/projects/#{@project.id}?offset=#{@offset + 100}"}>More feedback</a>
+  <section :if={@owner}>
+    <h2>Delete project</h2><p>
+      Deletes all project feedback and reviewers permanently. Type “delete” to confirm.
+    </p>
+    <.form for={@form} action={~p"/app/projects/#{@project.id}/delete"} id="delete-project">
+      <.input
+        field={@form[:confirm]}
+        label="Confirmation"
+        required
+        pattern="delete"
+        class="manage-input"
+      /><button class="button">Delete project</button>
+    </.form>
+  </section>
 </main>

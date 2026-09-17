@@ -48,6 +48,11 @@ defmodule FluentlyWeb.Router do
     get "/app", ManageController, :index
     post "/app/projects", ManageController, :create
     get "/app/projects/:id", ManageController, :show
+    post "/app/projects/:id/admins", ManageController, :grant_admin
+    post "/app/projects/:id/admins/:admin_id/delete", ManageController, :revoke_admin
+    post "/app/projects/:id/threads/:thread_id/replies", ManageController, :reply
+    post "/app/projects/:id/threads/:thread_id/status", ManageController, :status
+    get "/app/projects/:id/threads/:thread_id/snapshot", ManageController, :snapshot
     post "/app/projects/:id/rotate", ManageController, :rotate
     post "/app/projects/:id/delete", ManageController, :delete
     post "/app/projects/:id/threads/:thread_id/delete", ManageController, :delete_thread

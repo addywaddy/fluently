@@ -1,7 +1,7 @@
 defmodule FluentlyWeb.ManageController do
   use FluentlyWeb, :controller
   import Phoenix.Component, only: [to_form: 1, to_form: 2]
-  alias Fluently.Feedback
+  alias Fluently.{Feedback, ProjectAccess, Threads}
   plug :secure_page
   plug :require_owner when action not in [:login, :authenticate]
 
@@ -46,7 +46,7 @@ defmodule FluentlyWeb.ManageController do
   def index(conn, _),
     do:
       render(conn, :index,
-        projects: Feedback.projects(conn.assigns.workspace),
+        projects: ProjectAccess.projects(conn.assigns.workspace),
         form: to_form(%{}, as: :project),
         error: nil
       )
@@ -60,7 +60,7 @@ defmodule FluentlyWeb.ManageController do
         conn
         |> put_status(422)
         |> render(:index,
-          projects: Feedback.projects(conn.assigns.workspace),
+          projects: ProjectAccess.projects(conn.assigns.workspace),
           form: to_form(attrs, as: :project),
           error:
             "Enter a name and an exact HTTPS origin, e.g. https://staging.example.com. HTTP is allowed for localhost."
@@ -69,7 +69,7 @@ defmodule FluentlyWeb.ManageController do
   end
 
   def show(conn, %{"id" => id}) do
-    case Feedback.project(conn.assigns.workspace, id) do
+    case ProjectAccess.project(conn.assigns.workspace, id) do
       nil ->
         send_resp(conn, 404, "Not found")
 
@@ -106,10 +106,53 @@ defmodule FluentlyWeb.ManageController do
   def delete(conn, _), do: send_resp(conn, 422, "Type delete to confirm.")
 
   def delete_thread(conn, %{"id" => id, "thread_id" => tid}) do
-    with p when not is_nil(p) <- Feedback.project(conn.assigns.workspace, id),
+    with p when not is_nil(p) <- ProjectAccess.project(conn.assigns.workspace, id),
          {:ok, _} <- Fluently.Threads.delete(p, tid) do
       redirect(conn, to: ~p"/app/projects/#{id}")
     else
+      _ -> send_resp(conn, 404, "Not found")
+    end
+  end
+
+  def reply(conn, %{"id" => id, "thread_id" => tid} = params) do
+    with p when not is_nil(p) <- ProjectAccess.project(conn.assigns.workspace, id),
+         {:ok, reviewer} <- ProjectAccess.reviewer(conn.assigns.workspace, p),
+         {:ok, _} <- Threads.reply(p, reviewer, tid, params["body"]) do
+      redirect(conn, to: ~p"/app/projects/#{id}")
+    else
+      _ ->
+        send_resp(conn, 422, "Unable to reply. Check project access and enter 1–4000 characters.")
+    end
+  end
+
+  def status(conn, %{"id" => id, "thread_id" => tid} = params) do
+    with p when not is_nil(p) <- ProjectAccess.project(conn.assigns.workspace, id),
+         {:ok, _} <- Threads.status(p, tid, params["status"]) do
+      redirect(conn, to: ~p"/app/projects/#{id}")
+    else
+      _ -> send_resp(conn, 404, "Not found")
+    end
+  end
+
+  def snapshot(conn, %{"id" => id, "thread_id" => tid}) do
+    with p when not is_nil(p) <- ProjectAccess.project(conn.assigns.workspace, id),
+         snapshot when not is_nil(snapshot) <- Fluently.Snapshots.get(p, tid) do
+      conn |> put_resp_content_type("image/png") |> send_resp(200, snapshot.image)
+    else
+      _ -> send_resp(conn, 404, "Not found")
+    end
+  end
+
+  def grant_admin(conn, %{"id" => id} = params) do
+    case ProjectAccess.grant(conn.assigns.workspace, id, params["email"]) do
+      {:ok, _} -> redirect(conn, to: ~p"/app/projects/#{id}")
+      _ -> send_resp(conn, 422, "Owner access and an existing registered account are required.")
+    end
+  end
+
+  def revoke_admin(conn, %{"id" => id, "admin_id" => aid}) do
+    case ProjectAccess.revoke(conn.assigns.workspace, id, aid) do
+      :ok -> redirect(conn, to: ~p"/app/projects/#{id}")
       _ -> send_resp(conn, 404, "Not found")
     end
   end
@@ -129,7 +172,11 @@ defmodule FluentlyWeb.ManageController do
       project: p,
       credentials: credentials,
       service_url: FluentlyWeb.Endpoint.url(),
-      threads: Fluently.Threads.list(p, %{}),
+      threads: Fluently.Threads.list(p, conn.params),
+      offset: Threads.offset(conn.params["offset"]),
+      owner: p.workspace_id == conn.assigns.workspace.id,
+      admins:
+        if(p.workspace_id == conn.assigns.workspace.id, do: ProjectAccess.admins(p), else: []),
       form: to_form(%{})
     )
   end

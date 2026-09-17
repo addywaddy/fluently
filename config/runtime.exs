@@ -123,5 +123,16 @@ if config_env() == :prod do
   config :fluently, :mail_from, {"Fluently", System.fetch_env!("MAIL_FROM")}
 end
 
-# Private landing demos work without provisioning a template project.
+# Toggle the first-party landing feedback widget and its cookie API.
 config :fluently, :demo_enabled, System.get_env("FLUENTLY_DEMO_ENABLED", "true") == "true"
+
+# First-party feedback goes to the owner's shared project. An absent project fails closed.
+if config_env() != :test do
+  config :fluently,
+         :feedback_project_id,
+         System.get_env("FLUENTLY_PROJECT_ID") ||
+           if(config_env() == :prod,
+             do: "bfef5446-e12f-40d1-96db-dced5bf805e1",
+             else: "de78e976-1134-42b3-ad66-ac96136c3d31"
+           )
+end

@@ -1,0 +1,103 @@
+defmodule Fluently.ProjectAccess do
+  @moduledoc "Explicit project administration. Credentials and membership changes remain owner-only."
+  import Ecto.Query
+  alias Fluently.{Repo, Feedback}
+  alias Fluently.Feedback.{Project, ProjectAdmin, Reviewer}
+  alias Fluently.Accounts.Account
+
+  def projects(workspace) do
+    Repo.all(
+      from p in Project,
+        left_join: a in ProjectAdmin,
+        on: a.project_id == p.id and a.workspace_id == ^workspace.id,
+        where: p.workspace_id == ^workspace.id or not is_nil(a.id),
+        order_by: [desc: p.inserted_at]
+    )
+  end
+
+  def project(workspace, id) do
+    with %Project{} = p <- Feedback.project(id),
+         true <-
+           p.workspace_id == workspace.id or
+             Repo.exists?(
+               from a in ProjectAdmin,
+                 where: a.project_id == ^p.id and a.workspace_id == ^workspace.id
+             ) do
+      p
+    else
+      _ -> nil
+    end
+  end
+
+  def admins(project) do
+    Repo.all(
+      from a in ProjectAdmin,
+        join: u in Account,
+        on: u.workspace_id == a.workspace_id,
+        where: a.project_id == ^project.id and a.workspace_id != ^project.workspace_id,
+        select: %{id: a.id, name: u.name, email: u.email}
+    )
+  end
+
+  def grant(owner, id, email) when is_binary(email) do
+    with %Project{} = p <- Feedback.project(owner, id),
+         %Account{email: email} = account when not is_nil(email) <-
+           Repo.get_by(Account, email: String.downcase(String.trim(email))) do
+      %ProjectAdmin{project_id: p.id, workspace_id: account.workspace_id}
+      |> Repo.insert(on_conflict: :nothing, conflict_target: [:project_id, :workspace_id])
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def grant(_, _, _), do: {:error, :not_found}
+
+  def revoke(owner, id, admin_id) do
+    with %Project{} = p <- Feedback.project(owner, id),
+         {:ok, admin_id} <- Ecto.UUID.cast(admin_id) do
+      Repo.delete_all(
+        from a in ProjectAdmin,
+          where: a.project_id == ^p.id and a.id == ^admin_id and a.workspace_id != ^owner.id
+      )
+
+      :ok
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def existing_reviewer(workspace, project) do
+    if project(workspace, project.id) do
+      case Repo.get_by(ProjectAdmin, project_id: project.id, workspace_id: workspace.id) do
+        %{reviewer_id: id} when not is_nil(id) -> Repo.get(Reviewer, id)
+        _ -> nil
+      end
+    end
+  end
+
+  def reviewer(workspace, project) do
+    Repo.transaction(fn ->
+      if is_nil(project(workspace, project.id)), do: Repo.rollback(:not_found)
+      membership = Repo.get_by(ProjectAdmin, project_id: project.id, workspace_id: workspace.id)
+
+      if membership && membership.reviewer_id do
+        Repo.get!(Reviewer, membership.reviewer_id)
+      else
+        account = Repo.get_by(Account, workspace_id: workspace.id)
+
+        reviewer =
+          Repo.insert!(%Reviewer{
+            project_id: project.id,
+            kind: "admin",
+            name: if(account, do: account.name, else: "Project owner")
+          })
+
+        (membership || %ProjectAdmin{project_id: project.id, workspace_id: workspace.id})
+        |> Ecto.Changeset.change(reviewer_id: reviewer.id)
+        |> Repo.insert_or_update!()
+
+        reviewer
+      end
+    end)
+  end
+end

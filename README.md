@@ -25,8 +25,8 @@ Owner keys are bearer credentials: keep them in a password manager, not in the e
 Run `mix precommit` and `node --test test/embed/*.test.mjs` for checks.
 GitHub Actions runs on pushes to `main`, pull requests targeting `main`, and manual dispatch.
 It checks formatting and compilation warnings, runs backend/SDK tests, and builds the
-production Docker image (including assets and the release). CI needs no production
-secrets and does not publish images, apply Terraform, or deploy.
+production Docker image (including assets and the release). Pushes to `main` deploy through Kamal after both checks pass; deployment uses GitHub secrets.
+Pull request checks do not deploy, and CI never applies Terraform.
 Run `mix assets.build` after editing `assets/embed/`; the normal development watcher watches app.js only.
 
 ## Create a project and install
@@ -52,31 +52,28 @@ On customer websites, no invitation/session means no widget or feedback requests
 
 ## Dogfooding on Fluently
 
-The landing demo is enabled by default locally and in production. No project setup,
-ID, or invitation is required. Only the landing route includes the embed; login and
-project-management screens do not. Set `FLUENTLY_DEMO_ENABLED=false` to disable it.
-Ordinary visitors can click the floating Fluently logo without an invitation or name prompt.
-Their first successful comment creates an anonymous account and a private demo project.
-A signed HttpOnly, SameSite cookie remembers their session across reloads. Each visitor
-sees only their own demo. The private project uses the origin serving the landing page.
+The landing widget sends feedback to the **Fluently** project. Visitors see only threads
+that they started, including replies from the team. The owner and explicitly added project
+admins see all feedback, both on the landing page when signed in and in `/app/projects/:id`.
+The inbox supports replies, resolve/reopen, snapshots, deletion and pagination. Owners can
+add or revoke admins by their existing registered account email; admins cannot manage
+credentials, grant access or delete the project.
 
-**Save my demo** opens `/signup`. Registration upgrades the same account, preserves its
-comments, and unlocks project creation in `/app`. A new session replaces the anonymous
-session. `/login` restores a registered account on another device. Login opens that
-account’s existing demo; it does not merge a different anonymous demo. Currently one
-active account session is supported: signing in elsewhere revokes the earlier session.
-Email addresses are unverified identifiers; verification and password recovery flows
-are not implemented yet. Production email delivery is configured for Resend using
-`RESEND_API_KEY` and `MAIL_FROM`; see the deployment guide. Development keeps the local
-Swoosh mailbox at `/dev/mailbox`.
+The first successful comment creates an anonymous identity, remembered by a signed
+HttpOnly, SameSite cookie. **Keep access** opens `/signup`, upgrading that same identity.
+Guest access expires after 14 days (or is lost if cookies are cleared), but submitted
+feedback stays in the owner’s project. Signup removes guest expiry; registered sessions
+last 30 days. Login does not merge a different anonymous session. One active account
+session is supported. Email verification and password recovery are not implemented yet.
 
-Unclaimed demos expire 14 days after creation and are deleted by an hourly cleanup
-worker (up to 500 per run). Clearing cookies loses access to an unclaimed demo. Signup
-removes its expiry. Registered sessions last 30 days; sign-out revokes them server-side.
-
-Run `mix phx.server` locally; the same demo flow runs at `https://fluently.now` in
-production. Existing private demo projects and comments remain intact. Customer embeds
-still require a public project ID and an authorized reviewer session.
+`FLUENTLY_PROJECT_ID` selects the first-party project; it must also have `public_feedback`
+enabled in the database. The migration enables the existing local and production Fluently
+projects. A missing or unapproved project fails closed. On a fresh local database, create
+a project in `/app`, enable its `public_feedback` flag in IEx, and export its ID before
+starting Phoenix. `FLUENTLY_DEMO_ENABLED=false` disables the landing widget and API.
+Only the landing route includes the embed. Customer projects remain invite-only by default.
+Previously private demo projects stay private; their comments are never copied to the shared
+inbox. Registered users retain them in their workspace; unclaimed legacy demos still expire.
 
 ## Anchors and privacy
 
@@ -149,7 +146,10 @@ the API is paginated. See `test/support/feedback_fixtures.ex` for a complete cre
 
 The landing demo uses separate, same-origin `/demo/comments` endpoints with the same
 thread lifecycle payloads. These require the browser cookie and CSRF token for writes;
-they derive the project from the account and accept no project selection from the client.
+they derive the project from server configuration and accept no project selection from the client.
+Every thread/snapshot operation enforces author visibility; owners and project admins have full access.
+For public-feedback projects, invitation sessions also see only threads they started; the trusted
+read-only API key retains full project visibility.
 The public project ID never grants access to a private demo or customer project.
 
 Snapshot API: `POST /api/projects/:id/comments/:thread_id/snapshot` accepts
@@ -157,7 +157,7 @@ Snapshot API: `POST /api/projects/:id/comments/:thread_id/snapshot` accepts
 token. `GET` on the same path returns `{data: {data_url, width, height, created_at}}` to
 project reviewers or read-only API keys. Retries preserve the original attachment.
 Thread/list responses contain snapshot dimensions/time or null, never image bytes.
-The private demo uses `/demo/comments/:thread_id/snapshot` with its cookie/CSRF session.
+The landing widget uses `/demo/comments/:thread_id/snapshot` with its cookie/CSRF session.
 
 ## Architecture and deployment
 

@@ -2,13 +2,19 @@ defmodule FluentlyWeb.DemoController do
   use FluentlyWeb, :controller
   alias Fluently.{Accounts, Threads, RateLimit}
   plug :boundary
+  plug :thread_boundary
 
   def index(conn, params) do
     project = Accounts.demo_project(conn.assigns.account)
 
     threads =
       if project,
-        do: Threads.list(project, Map.put(params, "page", project.origin <> "/")),
+        do:
+          Threads.list(
+            project,
+            Map.put(params, "page", project.origin <> "/"),
+            visitor_scope(conn)
+          ),
         else: []
 
     json(conn, %{
@@ -72,10 +78,9 @@ defmodule FluentlyWeb.DemoController do
   end
 
   def reply(conn, %{"thread_id" => id} = params) do
-    with account when not is_nil(account) <- conn.assigns.account,
-         project when not is_nil(project) <- Accounts.demo_project(account),
-         {:ok, _} <- Threads.reply(project, Accounts.reviewer(account), id, params["body"]) do
-      json(conn, %{data: serialize(conn, Threads.get(project, id), Accounts.reviewer(account))})
+    with project when not is_nil(project) <- Accounts.demo_project(conn.assigns.account),
+         {:ok, _} <- Threads.reply(project, reply_reviewer(conn), id, params["body"]) do
+      json(conn, %{data: serialize(conn, Threads.get(project, id), reply_reviewer(conn))})
     else
       {:error, %Ecto.Changeset{}} -> error(conn, 422, "Write a reply of 1–4000 characters.")
       _ -> error(conn, 404, "Not found")
@@ -83,10 +88,11 @@ defmodule FluentlyWeb.DemoController do
   end
 
   def update(conn, %{"thread_id" => id} = params) do
-    with account when not is_nil(account) <- conn.assigns.account,
-         project when not is_nil(project) <- Accounts.demo_project(account),
+    with project when not is_nil(project) <- Accounts.demo_project(conn.assigns.account),
          {:ok, _} <- Threads.status(project, id, params["status"]) do
-      json(conn, %{data: serialize(conn, Threads.get(project, id), Accounts.reviewer(account))})
+      json(conn, %{
+        data: serialize(conn, Threads.get(project, id), reviewer(conn.assigns.account))
+      })
     else
       {:error, :invalid_status} -> error(conn, 422, "Invalid status")
       _ -> error(conn, 404, "Not found")
@@ -94,15 +100,17 @@ defmodule FluentlyWeb.DemoController do
   end
 
   def delete_message(conn, %{"thread_id" => id, "message_id" => message_id}) do
-    with account when not is_nil(account) <- conn.assigns.account,
-         project when not is_nil(project) <- Accounts.demo_project(account),
-         {:ok, result} <-
-           Threads.delete_message(project, Accounts.reviewer(account), id, message_id) do
+    with project when not is_nil(project) <- Accounts.demo_project(conn.assigns.account),
+         thread when not is_nil(thread) <- Threads.get(project, id),
+         message when not is_nil(message) <- Enum.find(thread.messages, &(&1.id == message_id)),
+         author when not is_nil(author) <-
+           Enum.find(reviewers(conn), &(&1.id == message.reviewer_id)),
+         {:ok, result} <- Threads.delete_message(project, author, id, message_id) do
       json(conn, %{
         deleted_thread: result.deleted_thread,
         data:
           if(result.thread,
-            do: serialize(conn, result.thread, Accounts.reviewer(account)),
+            do: serialize(conn, result.thread, reviewer(conn.assigns.account)),
             else: nil
           )
       })
@@ -111,10 +119,31 @@ defmodule FluentlyWeb.DemoController do
     end
   end
 
-  # Demo storage uses its private project's canonical origin. The browser may use
+  # Storage uses the project's canonical origin. The browser may use
   # another address for this same app (e.g. 127.0.0.1 instead of localhost).
   defp serialize(conn, thread, reviewer) do
-    thread |> Threads.serialize(reviewer) |> Map.put(:page, request_origin(conn) <> "/")
+    ids = Enum.map([reviewer | reviewers(conn)] |> Enum.reject(&is_nil/1), & &1.id)
+
+    thread
+    |> Threads.serialize(reviewer)
+    |> Map.put(:page, request_origin(conn) <> "/")
+    |> Map.update!(:messages, fn messages ->
+      Enum.map(messages, &Map.put(&1, :can_delete, &1.author.id in ids))
+    end)
+  end
+
+  defp reviewers(conn) do
+    own = reviewer(conn.assigns.account)
+
+    admin =
+      if visitor_scope(conn) == :all do
+        Fluently.ProjectAccess.existing_reviewer(
+          admin_workspace(conn),
+          Accounts.demo_project(conn.assigns.account)
+        )
+      end
+
+    Enum.reject([own, admin], &is_nil/1)
   end
 
   defp request_origin(conn) do
@@ -154,6 +183,65 @@ defmodule FluentlyWeb.DemoController do
 
       true ->
         assign(conn, :account, account)
+    end
+  end
+
+  defp visitor_scope(conn) do
+    account = conn.assigns.account
+    project = Accounts.demo_project(account)
+
+    workspace = admin_workspace(conn)
+
+    cond do
+      workspace && project && Fluently.ProjectAccess.project(workspace, project.id) -> :all
+      reviewer(account) -> reviewer(account).id
+      true -> :none
+    end
+  end
+
+  defp admin_workspace(conn) do
+    account = conn.assigns.account
+
+    if account && account.email do
+      Fluently.Feedback.workspace(account.workspace_id)
+    else
+      with {:ok, id} <-
+             Phoenix.Token.verify(
+               FluentlyWeb.Endpoint,
+               "owner-v1",
+               get_session(conn, :owner) || "",
+               max_age: 43_200
+             ) do
+        Fluently.Feedback.workspace(id)
+      else
+        _ -> nil
+      end
+    end
+  end
+
+  defp reply_reviewer(conn) do
+    if visitor_scope(conn) == :all do
+      {:ok, reviewer} =
+        Fluently.ProjectAccess.reviewer(
+          admin_workspace(conn),
+          Accounts.demo_project(conn.assigns.account)
+        )
+
+      reviewer
+    else
+      reviewer(conn.assigns.account)
+    end
+  end
+
+  defp thread_boundary(conn, _) do
+    if conn.params["thread_id"] do
+      project = Accounts.demo_project(conn.assigns.account)
+
+      if project && Threads.visible?(project, conn.params["thread_id"], visitor_scope(conn)),
+        do: conn,
+        else: conn |> error(404, "Not found") |> halt()
+    else
+      conn
     end
   end
 

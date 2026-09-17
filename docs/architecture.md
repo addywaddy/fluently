@@ -13,33 +13,39 @@
 - Single app instance with bounded in-memory rate limiting for the pilot. Multiple replicas need a shared limiter before scale-out.
 - Deferred: automated privacy-risk/redaction pipeline, MCP, billing, automatic code changes, analytics, teams/SSO, configurable retention, native SDKs. Project deletion is available now.
 
-## Personal landing demo and account upgrade
+## Shared first-party feedback and account upgrade (2026-09-17)
 
-No template project or configured project ID is required. The landing demo defaults
-to enabled in every environment, with a `FLUENTLY_DEMO_ENABLED=false` opt-out. New
-private projects use the serving request origin; existing project origins are preserved. The private demo
-checks browser Origin against the serving request origin (including scheme and port),
-retains CSRF protection, and presents comment URLs at that serving origin. This permits
-local address aliases without weakening customer projects’ exact-origin boundary. Each anonymous visitor
-gets a distinct workspace, project and reviewer on their first successful comment, in
-one transaction. Failed comments and page views create no account records. Reusing the
-existing project boundary keeps public demo isolation independent of reviewer filters;
-no shared project ever becomes publicly writable. `/demo` is a same-origin, cookie/CSRF
-API, separate from the cross-origin bearer-token customer API. Both apply rate limits.
+The landing widget is a feedback channel to the Fluently team. It uses one explicitly
+configured project with `public_feedback=true`. Customer projects remain invite-only by
+default; a public project UUID is never an access credential. `/demo` keeps its URL for
+SDK compatibility but is a same-origin cookie/CSRF API with rate limiting. It canonicalizes
+landing feedback to the configured project's root URL; local address aliases remain supported.
 
-Signup upgrades the account row and reviewer in place and clears its expiry. It does not
-copy comments or transfer a caller-supplied project. A locked account row serializes
-signup with demo creation and retention. Session secrets are random, hashed in the DB,
-and carried inside the signed HttpOnly, SameSite browser cookie (Secure in production).
-Signup rotates the secret; old anonymous cookies cannot access the registered workspace.
-Signout revokes the session. The pilot deliberately supports one active session per
-account; a new login revokes the previous session. Accounts are independent of project
-reviewers so later multi-project identities can coexist with invited guests.
+Anonymous accounts and reviewers are created on the first successful comment in one
+transaction. The separate `feedback_reviewer_id` preserves legacy private demo references
+without moving previously private comments into an owner's inbox. New feedback belongs to
+the shared project, not the visitor's workspace. Deleting an expired guest workspace leaves
+the shared reviewer, threads and snapshots intact. Guest access expires after 14 days;
+registration upgrades authorship in place and removes expiry. Cookie loss cannot recover
+an anonymous identity; logging in does not merge an unrelated guest session.
 
-Unclaimed identities expire after 14 days from creation. An hourly worker purges up to
-500 expired workspaces, their threads/messages and reviewers. Claimed accounts are exempt.
-Cookie loss cannot recover an anonymous identity. Logging into an existing account does
-not implicitly merge another anonymous identity.
+Thread visibility is checked server-side for every read, reply, status change, deletion and
+snapshot request. Pagination filters by author before applying limits. Client-supplied
+reviewer/project IDs cannot change the scope. Invitation-based reviewers of public-feedback
+projects are also author-scoped, preventing the customer API from bypassing privacy. The
+trusted read API key retains project-wide visibility for owner-operated integrations.
+
+Project administration is an explicit workspace membership (currently one account per
+workspace). Owners may grant/revoke access to an existing registered account. Admins can
+read/reply/resolve/delete feedback and view snapshots; credentials, membership changes and
+project deletion remain owner-only. Every request rechecks membership. The landing widget
+recognizes account and pilot-owner sessions, so staff can review pins in context. Admin
+replies use a project-scoped reviewer; visitor threads keep their original author.
+
+Account secrets are random, hashed in the DB and carried by signed HttpOnly, SameSite
+cookies (Secure in production). Signup rotates the secret. Signout revokes it. The pilot
+supports one active account session; a new login revokes the previous session. SQLite
+IMMEDIATE transactions serialize identity upgrades and expiry with writes.
 
 Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations through OTP crypto,
 following the [OWASP PBKDF2 guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
