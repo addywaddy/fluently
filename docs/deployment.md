@@ -10,6 +10,10 @@ Pushes to `main` run lint/tests and a production Docker build, then deploy with
 Kamal 2.10.1 from GitHub's runner. Pull requests never deploy. A manual run of the CI
 workflow on `main` also deploys. Deployments are serialized and are not cancelled by
 new pushes. The `production` environment groups deployment history.
+For an explicitly requested deployment without browser tests, dispatch manually with
+`gh workflow run ci.yml --ref main -f skip_browser_tests=true`. This still runs formatting,
+backend/SDK unit tests and the production Docker build. Ordinary pushes and manual runs
+without that option keep browser tests enabled.
 
 Repository Actions secrets: `KAMAL_REGISTRY_PASSWORD`, `SECRET_KEY_BASE`,
 `RESEND_API_KEY`, `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY`,

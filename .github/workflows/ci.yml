@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      skip_browser_tests:
+        description: 'Skip browser tests for this manual run'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -52,10 +58,12 @@ jobs:
       - name: Test embed SDK
         run: node --test test/embed/*.test.mjs
       - name: Install browser test dependencies
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_browser_tests) }}
         run: |
           npm ci --ignore-scripts
           npx playwright install --with-deps webkit
       - name: Build embed and test in WebKit
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_browser_tests) }}
         run: |
           mix assets.build
           npm run test:browser
