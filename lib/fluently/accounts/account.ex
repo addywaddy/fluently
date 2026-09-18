@@ -2,6 +2,7 @@ defmodule Fluently.Accounts.Account do
   use Ecto.Schema
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "accounts" do
+    field :user_id, Ecto.UUID
     field :workspace_id, Ecto.UUID
     field :demo_project_id, Ecto.UUID
     field :reviewer_id, Ecto.UUID

@@ -45,6 +45,7 @@ defmodule FluentlyWeb.Endpoint do
     param_key: "request_logger",
     cookie_key: "request_logger"
 
+  plug FluentlyWeb.ClientIP
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 

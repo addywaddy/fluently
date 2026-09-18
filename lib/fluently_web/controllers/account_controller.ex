@@ -44,10 +44,16 @@ defmodule FluentlyWeb.AccountController do
     do: conn |> put_status(401) |> render_form(:login, "Enter your email and password.")
 
   defp sign_in(conn, token) do
+    guest_token = get_session(conn, :guest_review_token) || get_session(conn, :account_token)
+
+    guest_token =
+      if Fluently.GuestReviews.current(Accounts.public_project(), guest_token), do: guest_token
+
     conn
     |> configure_session(renew: true)
     |> clear_session()
     |> put_session(:account_token, token)
+    |> put_session(:guest_review_token, guest_token)
     |> redirect(to: ~p"/app")
   end
 

@@ -3,7 +3,7 @@ defmodule Fluently.Feedback do
   import Ecto.Query
   import Ecto.Changeset
   alias Fluently.Repo
-  alias Fluently.Feedback.{Workspace, Project, Reviewer}
+  alias Fluently.Feedback.{Workspace, Project, ProjectUser}
 
   def secret, do: :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
   def hash(value) when is_binary(value), do: :crypto.hash(:sha256, value)
@@ -110,14 +110,29 @@ defmodule Fluently.Feedback do
     end
   end
 
+  def create_project_user(project, attrs, user_id \\ nil) do
+    Repo.transaction(fn ->
+      changeset =
+        %ProjectUser{project_id: project.id, user_id: user_id}
+        |> cast(attrs, [:name, :kind, :external_id])
+        |> validate_required([:name])
+        |> validate_length(:name, max: 80)
+        |> validate_length(:external_id, max: 200)
+
+      if not changeset.valid?, do: Repo.rollback(changeset)
+      user_id = user_id || Repo.insert!(%Fluently.Accounts.User{}).id
+
+      case changeset |> put_change(:user_id, user_id) |> Repo.insert() do
+        {:ok, identity} -> identity
+        {:error, error} -> Repo.rollback(error)
+      end
+    end)
+  end
+
   def start_review(p, key, name) do
     if valid_secret?(key, p.review_hash) and
          DateTime.compare(p.review_expires_at, DateTime.utc_now()) == :gt do
-      %Reviewer{project_id: p.id}
-      |> cast(%{name: name}, [:name])
-      |> validate_required([:name])
-      |> validate_length(:name, max: 80)
-      |> Repo.insert()
+      create_project_user(p, %{name: name})
       |> case do
         {:ok, reviewer} ->
           {:ok,
@@ -142,7 +157,7 @@ defmodule Fluently.Feedback do
            ),
          true <- id == p.id and version == p.credential_version,
          true <- DateTime.compare(p.review_expires_at, DateTime.utc_now()) == :gt,
-         %Reviewer{project_id: ^id} = reviewer <- safe_get(Reviewer, rid) do
+         %ProjectUser{project_id: ^id} = reviewer <- safe_get(ProjectUser, rid) do
       {:ok, reviewer}
     else
       _ -> {:error, :unauthorized}

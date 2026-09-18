@@ -1,10 +1,10 @@
 defmodule Fluently.Accounts do
-  @moduledoc "Guest feedback identities, upgraded in place at registration; legacy demos stay private."
+  @moduledoc "Registered accounts. Guest review sessions never create or upgrade accounts."
   import Ecto.Query
   import Ecto.Changeset
-  alias Fluently.{Repo, Feedback, Threads}
+  alias Fluently.{Repo, Feedback}
   alias Fluently.Accounts.Account
-  alias Fluently.Feedback.{Reviewer, Workspace, Thread}
+  alias Fluently.Feedback.{Workspace, Thread}
 
   def current(token) when is_binary(token) do
     now = DateTime.utc_now()
@@ -14,9 +14,26 @@ defmodule Fluently.Accounts do
         where: a.session_hash == ^Feedback.hash(token) and a.session_expires_at > ^now,
         where: is_nil(a.expires_at) or a.expires_at > ^now
     )
+    |> ensure_user()
   end
 
   def current(_), do: nil
+
+  # Old containers can finish a signup between the migration and release switch.
+  def ensure_user(%Account{email: email, user_id: nil} = account) when not is_nil(email) do
+    {:ok, account} =
+      Repo.transaction(fn ->
+        Repo.insert!(%Fluently.Accounts.User{id: account.id, kind: "registered"},
+          on_conflict: :nothing
+        )
+
+        account |> change(user_id: account.id) |> Repo.update!()
+      end)
+
+    account
+  end
+
+  def ensure_user(account), do: account
 
   def demo_enabled?, do: Application.get_env(:fluently, :demo_enabled, true)
 
@@ -25,36 +42,6 @@ defmodule Fluently.Accounts do
       %{public_feedback: true} = project -> project
       _ -> nil
     end
-  end
-
-  def demo_project(account) do
-    if Application.get_env(:fluently, :feedback_project_id),
-      do: public_project(),
-      else: if(account, do: Feedback.project(account.demo_project_id), else: nil)
-  end
-
-  def first_comment(account, attrs, origin) do
-    Repo.transaction(fn ->
-      if not demo_enabled?(), do: Repo.rollback(:disabled)
-      {account, token} = if account, do: {reload_active_account(account), nil}, else: anonymous!()
-      {account, project, reviewer} = ensure_demo!(account, origin)
-
-      case Threads.create(project, reviewer, attrs) do
-        {:ok, thread} -> %{account: account, token: token, thread: thread}
-        {:error, reason} -> Repo.rollback(reason)
-      end
-    end)
-  end
-
-  def reviewer(nil), do: nil
-
-  def reviewer(account) do
-    id =
-      if Application.get_env(:fluently, :feedback_project_id),
-        do: account.feedback_reviewer_id,
-        else: account.reviewer_id
-
-    if id, do: Repo.get(Reviewer, id)
   end
 
   def register(account, attrs) do
@@ -66,8 +53,13 @@ defmodule Fluently.Accounts do
       password_hash = password_hash(get_change(changeset, :password), salt)
 
       Repo.transaction(fn ->
-        account = if account, do: reload_active_account(account), else: elem(anonymous!(), 0)
-        if account.email, do: Repo.rollback(:already_registered)
+        if account && account.email, do: Repo.rollback(:already_registered)
+
+        {:ok, workspace, _} =
+          Feedback.create_workspace(get_change(changeset, :name) <> "’s workspace")
+
+        user = Repo.insert!(%Fluently.Accounts.User{kind: "registered"})
+        account = %Account{workspace_id: workspace.id, user_id: user.id}
         token = Feedback.secret()
 
         account =
@@ -78,16 +70,12 @@ defmodule Fluently.Accounts do
           |> put_change(:expires_at, nil)
           |> put_change(:session_hash, Feedback.hash(token))
           |> put_change(:session_expires_at, DateTime.add(DateTime.utc_now(), 30, :day))
-          |> Repo.update()
+          |> Repo.insert()
           |> unwrap!()
 
         Repo.get!(Workspace, account.workspace_id)
         |> change(name: account.name <> "’s workspace")
         |> Repo.update!()
-
-        for id <- [account.reviewer_id, account.feedback_reviewer_id], not is_nil(id) do
-          Repo.get!(Reviewer, id) |> change(name: account.name, kind: "account") |> Repo.update!()
-        end
 
         {account, token}
       end)
@@ -104,6 +92,7 @@ defmodule Fluently.Accounts do
     actual = password_hash(password, salt)
 
     if Plug.Crypto.secure_compare(actual, expected) and account do
+      account = ensure_user(account)
       token = Feedback.secret()
 
       {:ok, account} =
@@ -127,7 +116,7 @@ defmodule Fluently.Accounts do
   def logout(account),
     do: account |> change(session_hash: nil, session_expires_at: nil) |> Repo.update()
 
-  # The immediate transaction serializes expiry with signup before reading identities.
+  # Remove legacy private demos only; shared project feedback is independent.
   def prune_expired do
     now = DateTime.utc_now()
 
@@ -148,87 +137,6 @@ defmodule Fluently.Accounts do
 
       length(accounts)
     end)
-  end
-
-  defp anonymous! do
-    {:ok, workspace, _} = Feedback.create_workspace("Your private demo")
-    token = Feedback.secret()
-
-    account =
-      %Account{
-        workspace_id: workspace.id,
-        session_hash: Feedback.hash(token),
-        session_expires_at: DateTime.add(DateTime.utc_now(), 30, :day),
-        expires_at: DateTime.add(DateTime.utc_now(), 14, :day)
-      }
-      |> Repo.insert!()
-
-    {account, token}
-  end
-
-  defp ensure_demo!(account, origin) do
-    if Application.get_env(:fluently, :feedback_project_id) do
-      project = public_project() || Repo.rollback(:unavailable)
-      reviewer = reviewer(account)
-
-      if reviewer && reviewer.project_id == project.id do
-        {account, project, reviewer}
-      else
-        reviewer =
-          Repo.insert!(%Reviewer{
-            project_id: project.id,
-            name: account.name || "Visitor",
-            kind: if(account.email, do: "account", else: "anonymous")
-          })
-
-        account = account |> change(feedback_reviewer_id: reviewer.id) |> Repo.update!()
-        {account, project, reviewer}
-      end
-    else
-      ensure_private_demo!(account, origin)
-    end
-  end
-
-  defp ensure_private_demo!(account, origin) do
-    case demo_project(account) do
-      nil ->
-        project =
-          case Feedback.create_project(
-                 %Workspace{id: account.workspace_id},
-                 %{"name" => "My Fluently demo", "origin" => origin}
-               ) do
-            {:ok, project, _} -> project
-            {:error, error} -> Repo.rollback(error)
-          end
-
-        reviewer =
-          %Reviewer{
-            project_id: project.id,
-            name: account.name || "You",
-            kind: if(account.email, do: "account", else: "anonymous")
-          }
-          |> Repo.insert!()
-
-        account =
-          account
-          |> change(demo_project_id: project.id, reviewer_id: reviewer.id)
-          |> Repo.update!()
-
-        {account, project, reviewer}
-
-      project ->
-        {account, project, reviewer(account)}
-    end
-  end
-
-  defp reload_active_account(account) do
-    now = DateTime.utc_now()
-
-    Repo.one(
-      from a in Account,
-        where: a.id == ^account.id and a.session_hash == ^account.session_hash,
-        where: a.session_expires_at > ^now and (is_nil(a.expires_at) or a.expires_at > ^now)
-    ) || Repo.rollback(:expired)
   end
 
   defp registration_changeset(account, attrs) do

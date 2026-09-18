@@ -138,3 +138,15 @@ if config_env() != :test do
              else: "de78e976-1134-42b3-ad66-ac96136c3d31"
            )
 end
+
+# Resolve the explicitly trusted Docker proxy at boot, never from request input.
+# Restart/redeploy the app after replacing the proxy container so this stays current.
+if proxy = System.get_env("TRUSTED_PROXY_HOST") do
+  case :inet.getaddrs(String.to_charlist(proxy), :inet) do
+    {:ok, addresses} when addresses != [] ->
+      config :fluently, :trusted_proxy_ips, addresses
+
+    _ ->
+      raise "TRUSTED_PROXY_HOST could not be resolved"
+  end
+end

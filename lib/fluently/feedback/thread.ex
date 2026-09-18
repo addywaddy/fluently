@@ -3,7 +3,7 @@ defmodule Fluently.Feedback.Thread do
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "feedback_threads" do
     field :project_id, Ecto.UUID
-    belongs_to :reviewer, Fluently.Feedback.Reviewer, type: Ecto.UUID
+    belongs_to :reviewer, Fluently.Feedback.ProjectUser, type: Ecto.UUID
     field :page, :string
     field :status, :string, default: "open"
     field :anchor, :map

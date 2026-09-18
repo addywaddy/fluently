@@ -13,7 +13,7 @@ proxy:
   ssl: true
   host: <%= ENV.fetch("PHX_HOST").to_json %>
   app_port: 4000
-  forward_headers: true
+  forward_headers: false
   healthcheck:
     path: /up
     interval: 2
@@ -42,6 +42,7 @@ env:
     PHX_HOST: <%= ENV.fetch("PHX_HOST").to_json %>
     PORT: "4000"
     POOL_SIZE: "5"
+    TRUSTED_PROXY_HOST: "kamal-proxy"
 <% if ENV["SENTRY_DSN"] %>
     SENTRY_DSN: <%= ENV.fetch("SENTRY_DSN").to_json %>
 <% end %>

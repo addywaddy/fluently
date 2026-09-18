@@ -13,7 +13,7 @@
 - Single app instance with bounded in-memory rate limiting for the pilot. Multiple replicas need a shared limiter before scale-out.
 - Deferred: automated privacy-risk/redaction pipeline, MCP, billing, automatic code changes, analytics, teams/SSO, configurable retention, native SDKs. Project deletion is available now.
 
-## Shared first-party feedback and account upgrade (2026-09-17)
+## Shared first-party feedback and independent guest sessions (2026-09-18)
 
 The landing widget is a feedback channel to the Fluently team. It uses one explicitly
 configured project with `public_feedback=true`. Customer projects remain invite-only by
@@ -24,13 +24,30 @@ Production validates the browser Origin against the configured public HTTPS host
 not the transport scheme/host/port of an individual reverse-proxied request. CSRF checks
 remain mandatory for writes; customer API exact-origin checks are unchanged.
 
-Anonymous accounts and reviewers are created on the first successful comment in one
-transaction. The separate `feedback_reviewer_id` preserves legacy private demo references
-without moving previously private comments into an owner's inbox. New feedback belongs to
-the shared project, not the visitor's workspace. Deleting an expired guest workspace leaves
-the shared reviewer, threads and snapshots intact. Guest access expires after 14 days;
-registration upgrades authorship in place and removes expiry. Cookie loss cannot recover
-an anonymous identity; logging in does not merge an unrelated guest session.
+A successful first comment creates a guest `User`, project-scoped `ProjectUser`, and
+`GuestReviewSession` atomically with the thread. No Account or workspace is created.
+`Account` contains registered credentials and points to a registered User. ProjectUser
+holds the project-local display name, kind and optional external reference; it points to
+User through an ordinary foreign key. Threads/messages keep their existing author IDs.
+The physical `reviewers` table and `reviewer_id` columns remain for migration/API compatibility;
+the application schema is now `ProjectUser`. Permissions stay in explicit project membership,
+not in the identity kind or customer reference.
+
+Guest capabilities expire after 14 days; expiry removes access, not submitted feedback.
+Signup creates an independent registered User/Account/workspace. It never merges guest
+identities or claims threads. The browser may retain its independent guest cookie capability
+through signup/login; a login on another device cannot recover it. Account authorship applies
+only in explicitly owned/administered projects. A guest identity remains unlinked when its
+visitor later becomes a project member; staff use a separate membership identity.
+
+Migration backfills registered Users from Account IDs and guest Users from existing reviewer
+IDs, preserving all credentials, comments, snapshots and project IDs. Existing feedback
+cookie hashes become separate guest capabilities with their original expiry. Legacy anonymous
+accounts written during the rolling release also transition lazily after validating the token,
+expiry and project; registered account login cannot use this fallback. Registered accounts
+created by the old release after migration receive their User lazily. Legacy private demo
+projects remain private, with their existing cleanup policy; they are never copied into the
+shared inbox. Do not roll back to old signup-claim behavior after accepting new guest sessions.
 
 Thread visibility is checked server-side for every read, reply, status change, deletion and
 snapshot request. Pagination filters by author before applying limits. Client-supplied
@@ -48,7 +65,7 @@ replies use a project-scoped reviewer; visitor threads keep their original autho
 Account secrets are random, hashed in the DB and carried by signed HttpOnly, SameSite
 cookies (Secure in production). Signup rotates the secret. Signout revokes it. The pilot
 supports one active account session; a new login revokes the previous session. SQLite
-IMMEDIATE transactions serialize identity upgrades and expiry with writes.
+IMMEDIATE transactions serialize guest creation and expiry with writes.
 
 Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations through OTP crypto,
 following the [OWASP PBKDF2 guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
@@ -56,7 +73,7 @@ This avoids adding a native password dependency to the existing release. Minimum
 is 15 characters; login and signup are rate-limited. Email is an unverified login identifier,
 never a basis for trusting or merging identities. Email verification and password recovery
 remain a follow-up before a wider public launch; no email infrastructure is required to
-exercise the demo-to-account flow locally.
+exercise registration locally.
 
 ## SQLite (2026-09-17)
 
@@ -144,3 +161,17 @@ while sending only the site's origin as Referer, never a page path or query. Com
 same-origin mode with no-referrer sends Origin:null in WebKit, as reproduced by the
 browser regression test. Customer CORS requests retain no-referrer. The backend still
 rejects null/foreign origins and requires CSRF tokens for cookie-authenticated writes.
+
+## Domain claims and runtime authorization
+
+An origin is an allowed deployment location, not verified ownership. The MVP deliberately
+has no DNS verification, installation verification or exclusive domain reservation.
+Different workspaces may configure projects on the same domain (including agencies and
+staging environments). Domain equality never grants project membership, connects a
+registered identity or exposes another project's feedback. Public project IDs carry no
+read/write authorization. Signed project review sessions, server-side API credentials
+and explicit account membership remain the authorization boundaries; CORS/origin checks
+are additional browser protections, not authentication. Authorized callers can fabricate
+feedback in their own project, and claims about a page are not attestation of provenance.
+Cookie-authenticated first-party writes retain CSRF protection. Rate limits use only the
+client address supplied by the explicitly trusted single Kamal ingress (see deployment).

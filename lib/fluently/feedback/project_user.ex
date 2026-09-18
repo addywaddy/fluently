@@ -1,7 +1,9 @@
-defmodule Fluently.Feedback.Reviewer do
+defmodule Fluently.Feedback.ProjectUser do
   use Ecto.Schema
   @primary_key {:id, :binary_id, autogenerate: true}
+  # Retain the physical table and foreign-key names for release compatibility.
   schema "reviewers" do
+    field :user_id, Ecto.UUID
     field :project_id, Ecto.UUID
     field :name, :string
     field :kind, :string, default: "guest"

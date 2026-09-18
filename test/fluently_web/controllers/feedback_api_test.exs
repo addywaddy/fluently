@@ -280,4 +280,35 @@ defmodule FluentlyWeb.FeedbackAPITest do
     assert get_resp_header(response, "cache-control") == ["no-store"]
     assert json_response(response, 200)["data"]["data_url"] == image
   end
+
+  test "claiming the same origin confers no rights to the existing project", ctx do
+    {:ok, claimant, _} = Feedback.create_workspace("Unverified claimant")
+
+    {:ok, copy, keys} =
+      Feedback.create_project(claimant, %{name: "Same domain", origin: ctx.project.origin})
+
+    {:ok, token, _} = Feedback.start_review(copy, keys.review, "Claimant")
+
+    created =
+      api(ctx.token)
+      |> post(ctx.path <> "/comments", Fluently.FeedbackFixtures.attrs())
+      |> json_response(201)
+
+    id = created["data"]["id"]
+    assert is_nil(Feedback.project(claimant, ctx.project.id))
+
+    for credential <- [token, keys.api, copy.id] do
+      assert api(credential) |> get(ctx.path <> "/comments/#{id}") |> json_response(401)
+
+      assert api(credential)
+             |> post(ctx.path <> "/comments/#{id}/replies", %{body: "intrusion"})
+             |> json_response(401)
+    end
+
+    assert api(token) |> get("/api/projects/#{copy.id}/comments/#{id}") |> json_response(404)
+
+    for origin <- ["null", "https://example.com.evil.test", "http://example.com"] do
+      assert api(ctx.token, origin) |> get(ctx.path <> "/comments") |> json_response(403)
+    end
+  end
 end

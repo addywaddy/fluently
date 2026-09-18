@@ -3,7 +3,7 @@ defmodule Fluently.Threads do
   import Ecto.Query
   import Ecto.Changeset
   alias Fluently.Repo
-  alias Fluently.Feedback.{Thread, Message, Anchor, Reviewer}
+  alias Fluently.Feedback.{Thread, Message, Anchor, ProjectUser}
 
   # :all is an internal capability, never accepted from request parameters.
   def visible?(project, id, scope) do
@@ -58,7 +58,7 @@ defmodule Fluently.Threads do
     end
   end
 
-  def create(project, %Reviewer{project_id: pid} = reviewer, attrs) when pid == project.id do
+  def create(project, %ProjectUser{project_id: pid} = reviewer, attrs) when pid == project.id do
     with {:ok, anchor} <- Anchor.normalize(attrs["anchor"]),
          {:ok, context} <- Anchor.context(attrs["context"]),
          {:ok, page} <- page(project, attrs["page"]) do
@@ -83,7 +83,7 @@ defmodule Fluently.Threads do
 
   def create(_, _, _), do: {:error, :unauthorized}
 
-  def reply(project, %Reviewer{project_id: pid} = reviewer, id, body) when pid == project.id do
+  def reply(project, %ProjectUser{project_id: pid} = reviewer, id, body) when pid == project.id do
     Repo.transaction(fn ->
       thread = transaction_thread(project, id) || Repo.rollback(:not_found)
 
@@ -116,7 +116,7 @@ defmodule Fluently.Threads do
     end
   end
 
-  def delete_message(project, %Reviewer{project_id: pid} = reviewer, thread_id, message_id)
+  def delete_message(project, %ProjectUser{project_id: pid} = reviewer, thread_id, message_id)
       when pid == project.id do
     Repo.transaction(fn ->
       with %Thread{} = thread <- transaction_thread(project, thread_id),

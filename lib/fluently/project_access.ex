@@ -2,7 +2,7 @@ defmodule Fluently.ProjectAccess do
   @moduledoc "Explicit project administration. Credentials and membership changes remain owner-only."
   import Ecto.Query
   alias Fluently.{Repo, Feedback}
-  alias Fluently.Feedback.{Project, ProjectAdmin, Reviewer}
+  alias Fluently.Feedback.{Project, ProjectAdmin, ProjectUser}
   alias Fluently.Accounts.Account
 
   def projects(workspace) do
@@ -69,7 +69,7 @@ defmodule Fluently.ProjectAccess do
   def existing_reviewer(workspace, project) do
     if project(workspace, project.id) do
       case Repo.get_by(ProjectAdmin, project_id: project.id, workspace_id: workspace.id) do
-        %{reviewer_id: id} when not is_nil(id) -> Repo.get(Reviewer, id)
+        %{reviewer_id: id} when not is_nil(id) -> Repo.get(ProjectUser, id)
         _ -> nil
       end
     end
@@ -81,16 +81,34 @@ defmodule Fluently.ProjectAccess do
       membership = Repo.get_by(ProjectAdmin, project_id: project.id, workspace_id: workspace.id)
 
       if membership && membership.reviewer_id do
-        Repo.get!(Reviewer, membership.reviewer_id)
-      else
-        account = Repo.get_by(Account, workspace_id: workspace.id)
+        identity = Repo.get!(ProjectUser, membership.reviewer_id)
 
-        reviewer =
-          Repo.insert!(%Reviewer{
-            project_id: project.id,
-            kind: "admin",
-            name: if(account, do: account.name, else: "Project owner")
-          })
+        account =
+          Repo.get_by(Account, workspace_id: workspace.id) |> Fluently.Accounts.ensure_user()
+
+        if account && identity.user_id != account.user_id,
+          do:
+            identity
+            |> Ecto.Changeset.change(
+              user_id: account.user_id,
+              name: account.name,
+              kind: "account"
+            )
+            |> Repo.update!(),
+          else: identity
+      else
+        account =
+          Repo.get_by(Account, workspace_id: workspace.id) |> Fluently.Accounts.ensure_user()
+
+        {:ok, reviewer} =
+          Feedback.create_project_user(
+            project,
+            %{
+              kind: if(account, do: "account", else: "admin"),
+              name: if(account, do: account.name, else: "Project owner")
+            },
+            if(account, do: account.user_id, else: nil)
+          )
 
         (membership || %ProjectAdmin{project_id: project.id, workspace_id: workspace.id})
         |> Ecto.Changeset.change(reviewer_id: reviewer.id)

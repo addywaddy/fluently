@@ -12,6 +12,7 @@ defmodule Fluently.Accounts.Retention do
 
   def handle_info(:prune, state) do
     Fluently.Accounts.prune_expired()
+    Fluently.GuestReviews.prune_expired()
     schedule()
     {:noreply, state}
   end

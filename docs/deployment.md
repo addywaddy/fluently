@@ -285,3 +285,15 @@ The in-memory limiter remains single-instance. Behind a proxy, IP limits current
 the proxy transport IP; configure trusted-proxy handling before scaling.
 Validate HTTPS sign-in, project creation, another-origin embed, comment persistence,
 reply/resolve/delete, and credential rotation. Keep the public service URL stable.
+
+### Client IPs and rate limits
+
+Kamal is the single public ingress; the app port is not published on the host.
+`TRUSTED_PROXY_HOST=kamal-proxy` resolves the proxy container's exact Docker IP at
+application boot. Only connections from that IP may supply the rightmost
+`X-Forwarded-For` address. Other headers and untrusted connections cannot choose
+a rate-limit identity. Missing/malformed values fall back to the transport peer.
+Kamal forwarding of incoming client-supplied proxy headers is disabled; it still
+sets its own forwarding headers. Do not add a CDN/upstream proxy without revisiting
+this trust boundary. Restart/redeploy Fluently after replacing the proxy container
+so the trusted address is refreshed. DNS resolution failure prevents startup.

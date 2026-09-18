@@ -1,183 +1,202 @@
 defmodule FluentlyWeb.DemoTest do
   use FluentlyWeb.ConnCase, async: false
-  alias Fluently.{Accounts, Feedback, Repo, Threads}
-  alias Fluently.Accounts.Account
+  alias Fluently.{Accounts, Feedback, GuestReviews, Repo, Threads}
+  alias Fluently.Accounts.{Account, User}
+  alias Fluently.Feedback.{GuestReviewSession, Workspace}
+  import Fluently.FeedbackFixtures
 
   setup do
-    previous = Application.get_env(:fluently, :demo_enabled)
-    Application.put_env(:fluently, :demo_enabled, true)
-    on_exit(fn -> Application.put_env(:fluently, :demo_enabled, previous) end)
-    :ok
+    {:ok, w, _} = Feedback.create_workspace("Fluently")
+    {:ok, p, _} = Feedback.create_project(w, %{name: "Fluently", origin: "http://localhost"})
+    p = Repo.update!(Ecto.Changeset.change(p, public_feedback: true))
+    previous = Application.get_env(:fluently, :feedback_project_id)
+    Application.put_env(:fluently, :feedback_project_id, p.id)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:fluently, :feedback_project_id, previous),
+        else: Application.delete_env(:fluently, :feedback_project_id)
+    end)
+
+    %{project: p, workspace: w}
   end
 
   defp visitor do
     n = System.unique_integer([:positive])
 
-    %{
-      build_conn()
-      | host: "localhost",
-        port: 80,
-        remote_ip: {10, div(n, 65536), rem(div(n, 256), 256), rem(n, 256)}
-    }
+    %{build_conn() | host: "localhost", remote_ip: {10, 21, rem(div(n, 256), 256), rem(n, 256)}}
     |> put_req_header("content-type", "application/json")
   end
 
   defp next(conn), do: conn |> recycle() |> put_req_header("content-type", "application/json")
-  defp attrs, do: Fluently.FeedbackFixtures.attrs()
 
   defp signup_attrs,
     do: %{
-      "account" => %{
-        "name" => "Jamie",
-        "email" => "jamie@example.com",
-        "password" => "a long demo passphrase"
-      }
+      account: %{name: "Jamie", email: "jamie@example.com", password: "a long demo passphrase"}
     }
 
-  test "visiting and invalid comments create no account; first successful comment creates one" do
-    assert Repo.aggregate(Fluently.Feedback.Project, :count) == 0
-    conn = visitor() |> get("/demo/comments")
-    assert json_response(conn, 200)["data"] == []
-    assert Repo.aggregate(Account, :count) == 0
-    assert conn |> next() |> post("/demo/comments", %{}) |> json_response(422)
-    assert Repo.aggregate(Account, :count) == 0
-    conn = conn |> next() |> post("/demo/comments", attrs())
-    result = json_response(conn, 201)["data"]
-    assert result["page"] == "http://localhost/"
-    assert hd(result["messages"])["author"]["kind"] == "anonymous"
-    assert Repo.aggregate(Account, :count) == 1
-    account = Accounts.current(get_session(conn, :account_token))
-    assert account.demo_project_id == result["project_id"]
-    assert conn.resp_cookies["_fluently_key"].http_only
-  end
-
-  test "cookie continuity, isolated visitors, replies and resolution" do
-    {:ok, workspace, _} = Feedback.create_workspace("Demo template")
-
-    {:ok, template, keys} =
-      Feedback.create_project(workspace, %{
-        "name" => "Fluently",
-        "origin" => "https://example.com"
-      })
-
+  test "only successful first comment creates a guest user and session; never an account or workspace",
+       %{project: p} do
+    baseline_users = Repo.aggregate(User, :count)
+    assert visitor() |> get("/demo/comments") |> json_response(200) |> Map.fetch!("data") == []
+    assert visitor() |> post("/demo/comments", %{}) |> json_response(422)
+    assert Repo.aggregate(User, :count) == baseline_users
+    assert Repo.aggregate(GuestReviewSession, :count) == 0
     first = visitor() |> post("/demo/comments", attrs())
     thread = json_response(first, 201)["data"]
-    second = visitor() |> post("/demo/comments", attrs())
-    other = json_response(second, 201)["data"]
-    refute thread["project_id"] == other["project_id"]
+    assert thread["project_id"] == p.id
+    assert Repo.aggregate(User, :count) == baseline_users + 1
+    assert Repo.aggregate(GuestReviewSession, :count) == 1
+    assert Repo.aggregate(Account, :count) == 0
+    assert Repo.aggregate(Workspace, :count) == 1
+    assert is_nil(get_session(first, :account_token))
+    assert first.resp_cookies["_fluently_key"].http_only
+    second = first |> next() |> post("/demo/comments", attrs()) |> json_response(201)
 
-    assert first
-           |> next()
-           |> get("/demo/comments")
-           |> json_response(200)
-           |> Map.get("data")
-           |> length() == 1
-
-    another = first |> next() |> post("/demo/comments", attrs()) |> json_response(201)
-
-    assert hd(another["data"]["messages"])["author"]["id"] ==
+    assert hd(second["data"]["messages"])["author"]["id"] ==
              hd(thread["messages"])["author"]["id"]
 
-    assert second
-           |> next()
-           |> post("/demo/comments/#{thread["id"]}/replies", %{body: "intrusion"})
-           |> json_response(404)
-
-    assert second
-           |> next()
-           |> patch("/demo/comments/#{thread["id"]}", %{status: "resolved"})
-           |> json_response(404)
-
-    assert visitor()
-           |> patch("/demo/comments/#{thread["id"]}", %{status: "resolved"})
-           |> json_response(404)
-
-    assert first
-           |> next()
-           |> post("/demo/comments/#{thread["id"]}/replies", %{body: "follow up"})
-           |> json_response(200)
-
-    assert first
-           |> next()
-           |> patch("/demo/comments/#{thread["id"]}", %{status: "resolved"})
-           |> json_response(200)
-
-    data = first |> next() |> get("/demo/comments?status=resolved") |> json_response(200)
-    assert length(data["data"]) == 1
-    assert length(hd(data["data"])["messages"]) == 2
-    assert Threads.list(template, %{}) == []
-    {:ok, staff_token, _} = Feedback.start_review(template, keys.review, "Staff")
-
-    assert visitor()
-           |> put_req_header("authorization", "Bearer " <> staff_token)
-           |> get("/api/projects/#{thread["project_id"]}/comments")
-           |> json_response(401)
-
-    assert visitor()
-           |> post("/api/projects/#{template.id}/comments", attrs())
-           |> json_response(401)
+    assert Repo.aggregate(User, :count) == baseline_users + 1
   end
 
-  test "signup upgrades the identity and revokes its anonymous session; login restores feedback" do
+  test "signup preserves browser guest session without claiming it; another device cannot recover guest feedback",
+       %{project: p} do
     first = visitor() |> post("/demo/comments", attrs())
-    thread = json_response(first, 201)["data"]
-    old_token = get_session(first, :account_token)
-    old_account = Accounts.current(old_token)
-    signed_up = first |> next() |> post("/signup", signup_attrs())
-    assert redirected_to(signed_up) == "/app"
-    account = Accounts.current(get_session(signed_up, :account_token))
-    assert account.id == old_account.id
-    assert account.demo_project_id == old_account.demo_project_id
-    assert is_nil(account.expires_at)
-    assert is_nil(Accounts.current(old_token))
-    assert account.password_hash != "a long demo passphrase"
-    data = signed_up |> next() |> get("/demo/comments") |> json_response(200)
-    assert data["registered"]
-    assert hd(data["data"])["id"] == thread["id"]
-    assert hd(hd(data["data"])["messages"])["author"]["kind"] == "account"
-    assert signed_up |> next() |> get("/app") |> html_response(200)
+    token = get_session(first, :guest_review_token)
+    guest = GuestReviews.current(p, token)
+    signed = first |> next() |> post("/signup", signup_attrs())
+    assert redirected_to(signed) == "/app"
+    account = Accounts.current(get_session(signed, :account_token))
+    refute account.user_id == guest.user_id
+    assert is_nil(account.feedback_reviewer_id)
+    assert is_nil(account.demo_project_id)
+    assert get_session(signed, :guest_review_token) == token
+    assert GuestReviews.current(p, token).kind == "anonymous"
 
-    created =
-      signed_up
-      |> next()
-      |> post("/app/projects", %{
-        project: %{name: "Customer site", origin: "https://customer.test"}
-      })
-
-    assert redirected_to(created) =~ "/app/projects/"
-    signed_up |> next() |> post("/app/logout")
-    assert is_nil(Accounts.current(get_session(signed_up, :account_token)))
-    login = visitor() |> post("/login", signup_attrs())
-    assert redirected_to(login) == "/app"
-    assert Accounts.current(get_session(login, :account_token)).id == account.id
-
-    assert login
+    assert signed
            |> next()
            |> get("/demo/comments")
            |> json_response(200)
-           |> Map.get("data")
-           |> hd()
-           |> Map.get("id") == thread["id"]
+           |> Map.fetch!("data")
+           |> length() == 1
+
+    login = visitor() |> post("/login", signup_attrs())
+    assert redirected_to(login) == "/app"
+
+    assert login |> next() |> get("/demo/comments") |> json_response(200) |> Map.fetch!("data") ==
+             []
+
+    added = login |> next() |> post("/demo/comments", attrs()) |> json_response(201)
+    assert hd(added["data"]["messages"])["author"]["name"] == "Guest"
+    assert hd(added["data"]["messages"])["author"]["kind"] == "anonymous"
   end
 
-  test "anonymous sessions cannot manage workspaces or overwrite a registered identity" do
+  test "registered owner authors with account identity; nonmember stays unlinked", %{
+    project: p,
+    workspace: w
+  } do
+    {:ok, {owner, token}} = Accounts.register(nil, signup_attrs().account)
+    owner = Repo.update!(Ecto.Changeset.change(owner, workspace_id: w.id))
+    conn = visitor() |> init_test_session(account_token: token) |> post("/demo/comments", attrs())
+    thread = json_response(conn, 201)["data"]
+    identity = Repo.get!(Fluently.Feedback.ProjectUser, hd(thread["messages"])["author"]["id"])
+    assert identity.user_id == owner.user_id
+    assert identity.project_id == p.id
+    assert identity.kind == "account"
+    assert Repo.aggregate(GuestReviewSession, :count) == 0
+  end
+
+  test "granting and revoking membership never relinks earlier guest authorship", %{
+    project: p,
+    workspace: w
+  } do
     first = visitor() |> post("/demo/comments", attrs())
-    assert first |> next() |> get("/app") |> redirected_to() == "/app/login"
-    signed_up = first |> next() |> post("/signup", signup_attrs())
-    assert redirected_to(signed_up) == "/app"
-    assert signed_up |> next() |> post("/signup", signup_attrs()) |> html_response(422)
-    other = visitor() |> post("/demo/comments", attrs())
-    other_account = Accounts.current(get_session(other, :account_token))
-    assert other |> next() |> post("/signup", signup_attrs()) |> html_response(422)
-    assert is_nil(Accounts.current(get_session(other, :account_token)).email)
-    assert Repo.get!(Account, other_account.id).demo_project_id == other_account.demo_project_id
-
-    assert visitor()
-           |> post("/login", %{account: %{email: "jamie@example.com", password: "incorrect"}})
-           |> html_response(401)
+    thread_id = json_response(first, 201)["data"]["id"]
+    guest = GuestReviews.current(p, get_session(first, :guest_review_token))
+    signed = first |> next() |> post("/signup", signup_attrs())
+    account = Accounts.current(get_session(signed, :account_token))
+    {:ok, membership} = Fluently.ProjectAccess.grant(w, p.id, account.email)
+    member = signed |> next() |> post("/demo/comments", attrs())
+    member_author = hd(json_response(member, 201)["data"]["messages"])["author"]["id"]
+    assert Repo.get!(Fluently.Feedback.ProjectUser, member_author).user_id == account.user_id
+    assert Threads.get(p, thread_id).reviewer_id == guest.id
+    assert Repo.get!(Fluently.Feedback.ProjectUser, guest.id).user_id == guest.user_id
+    refute guest.user_id == account.user_id
+    assert :ok = Fluently.ProjectAccess.revoke(w, p.id, membership.id)
+    visible = member |> next() |> get("/demo/comments") |> json_response(200)
+    assert Enum.map(visible["data"], & &1["id"]) == [thread_id]
+    later = member |> next() |> post("/demo/comments", attrs()) |> json_response(201)
+    assert hd(later["data"]["messages"])["author"]["id"] == guest.id
   end
 
-  test "origin, CSRF, and public write limits are enforced" do
+  test "legacy session capability can transition without linking or updating a registered account",
+       %{project: p} do
+    {:ok, identity} = Feedback.create_project_user(p, %{name: "Legacy guest"})
+    {:ok, thread} = Threads.create(p, identity, Map.put(attrs(), "page", p.origin <> "/"))
+    old = Feedback.secret()
+
+    Repo.insert!(%GuestReviewSession{
+      project_user_id: identity.id,
+      token_hash: Feedback.hash(old),
+      expires_at: DateTime.add(DateTime.utc_now(), 1, :day)
+    })
+
+    conn = visitor() |> init_test_session(account_token: old) |> get("/demo/comments")
+    assert hd(json_response(conn, 200)["data"])["id"] == thread.id
+    assert get_session(conn, :guest_review_token) == old
+    signed = conn |> next() |> post("/signup", signup_attrs())
+    assert redirected_to(signed) == "/app"
+    refute Accounts.current(get_session(signed, :account_token)).user_id == identity.user_id
+    assert Repo.get!(Fluently.Feedback.ProjectUser, identity.id).name == "Legacy guest"
+  end
+
+  test "rolling-release anonymous cookies migrate, but registered login cannot recover guest identity",
+       %{project: p} do
+    {:ok, w, _} = Feedback.create_workspace("Legacy")
+
+    identity =
+      Repo.insert!(%Fluently.Feedback.ProjectUser{
+        project_id: p.id,
+        name: "Old guest",
+        kind: "anonymous"
+      })
+
+    old = Feedback.secret()
+
+    account =
+      Repo.insert!(%Account{
+        workspace_id: w.id,
+        feedback_reviewer_id: identity.id,
+        session_hash: Feedback.hash(old),
+        session_expires_at: DateTime.add(DateTime.utc_now(), 2, :day),
+        expires_at: DateTime.add(DateTime.utc_now(), 1, :day)
+      })
+
+    assert GuestReviews.current(p, old).id == identity.id
+    assert Repo.get!(Fluently.Feedback.ProjectUser, identity.id).user_id == identity.id
+    assert Repo.get!(User, identity.id).kind == "guest"
+    assert Repo.aggregate(GuestReviewSession, :count) == 1
+
+    {:ok, other, _} = Feedback.create_project(w, %{name: "Other", origin: "http://localhost"})
+    refute GuestReviews.current(other, old)
+    new_token = Feedback.secret()
+
+    Repo.update!(
+      Ecto.Changeset.change(account,
+        email: "old@example.com",
+        expires_at: nil,
+        session_hash: Feedback.hash(new_token)
+      )
+    )
+
+    registered = Accounts.current(new_token)
+    assert registered.user_id == account.id
+    assert Repo.get!(User, registered.user_id).kind == "registered"
+    refute GuestReviews.current(p, new_token)
+    assert GuestReviews.current(p, old).id == identity.id
+  end
+
+  test "origin, CSRF, and public write limits remain enforced" do
     assert visitor()
            |> put_req_header("origin", "https://evil.test")
            |> post("/demo/comments", attrs())
@@ -194,154 +213,53 @@ defmodule FluentlyWeb.DemoTest do
     assert conn |> post("/demo/comments", attrs()) |> json_response(429)
   end
 
-  test "expired anonymous projects are purged, registered projects survive" do
-    first = visitor() |> post("/demo/comments", attrs())
-    account = Accounts.current(get_session(first, :account_token))
+  test "signup and password login preserve session revocation and reject weak credentials" do
+    assert visitor()
+           |> post("/signup", put_in(signup_attrs(), [:account, :password], "short"))
+           |> html_response(422)
 
-    second =
-      visitor() |> post("/demo/comments", attrs()) |> next() |> post("/signup", signup_attrs())
-
-    registered = Accounts.current(get_session(second, :account_token))
-
-    Repo.update!(
-      Ecto.Changeset.change(account, expires_at: DateTime.add(DateTime.utc_now(), -1, :day))
-    )
-
-    assert is_nil(Accounts.current(get_session(first, :account_token)))
-    assert {:ok, 1} = Accounts.prune_expired()
-    assert is_nil(Repo.get(Account, account.id))
-    assert is_nil(Feedback.project(account.demo_project_id))
-    assert Feedback.project(registered.demo_project_id)
-    assert Repo.get(Account, registered.id)
-  end
-
-  test "weak passwords create nothing and new logins revoke the previous session" do
-    attrs = put_in(signup_attrs(), ["account", "password"], "short")
-    assert visitor() |> post("/signup", attrs) |> html_response(422)
     assert Repo.aggregate(Account, :count) == 0
     signup = visitor() |> post("/signup", signup_attrs())
-    original_token = get_session(signup, :account_token)
+    token = get_session(signup, :account_token)
+    assert signup |> next() |> post("/signup", signup_attrs()) |> html_response(422)
+
+    assert visitor()
+           |> post("/login", put_in(signup_attrs(), [:account, :password], "incorrect"))
+           |> html_response(401)
+
     login = visitor() |> post("/login", signup_attrs())
     assert redirected_to(login) == "/app"
-    assert is_nil(Accounts.current(original_token))
-    assert Accounts.current(get_session(login, :account_token))
+    assert is_nil(Accounts.current(token))
+    login |> next() |> post("/app/logout")
+    assert is_nil(Accounts.current(get_session(login, :account_token)))
   end
 
-  test "signup without a demo works and disabled demo creates nothing" do
-    conn = visitor() |> post("/signup", signup_attrs())
-    assert redirected_to(conn) == "/app"
-    assert is_nil(Accounts.current(get_session(conn, :account_token)).demo_project_id)
-    Application.put_env(:fluently, :demo_enabled, false)
-    assert visitor() |> post("/demo/comments", attrs()) |> json_response(404)
-  end
-
-  test "private-demo deletion preserves visitor isolation and works after signup" do
-    owner = visitor() |> post("/demo/comments", attrs())
-    thread = json_response(owner, 201)["data"]
-    message = hd(thread["messages"])
-    assert message["can_delete"]
-    path = "/demo/comments/#{thread["id"]}/messages/#{message["id"]}"
-    other = visitor() |> post("/demo/comments", attrs())
-    assert other |> next() |> delete(path) |> json_response(404)
-    assert visitor() |> delete(path) |> json_response(404)
-
-    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
-      owner |> next() |> put_private(:plug_skip_csrf_protection, false) |> delete(path)
-    end
-
-    replied =
-      owner
-      |> next()
-      |> post("/demo/comments/#{thread["id"]}/replies", %{body: "Remove this reply"})
-
-    reply = json_response(replied, 200)["data"]["messages"] |> List.last()
-
-    result =
-      owner
-      |> next()
-      |> delete("/demo/comments/#{thread["id"]}/messages/#{reply["id"]}")
-      |> json_response(200)
-
-    refute result["deleted_thread"]
-    assert length(result["data"]["messages"]) == 1
-    saved = owner |> next() |> post("/signup", signup_attrs())
-    assert saved |> next() |> delete(path) |> json_response(200) |> Map.fetch!("deleted_thread")
-
-    assert saved |> next() |> get("/demo/comments") |> json_response(200) |> Map.fetch!("data") ==
-             []
-
-    assert other
-           |> next()
-           |> get("/demo/comments")
-           |> json_response(200)
-           |> Map.fetch!("data")
-           |> length() == 1
-  end
-
-  test "demo snapshots follow the private cookie and survive signup" do
-    owner = visitor() |> post("/demo/comments", attrs())
-    thread = json_response(owner, 201)["data"]
+  test "snapshots and guest access survive reload but not session expiry", %{project: p} do
+    first = visitor() |> post("/demo/comments", attrs())
+    thread = json_response(first, 201)["data"]
     path = "/demo/comments/#{thread["id"]}/snapshot"
-    data = %{data_url: Fluently.FeedbackFixtures.snapshot()}
-    assert visitor() |> get(path) |> json_response(404)
-    assert owner |> next() |> post(path, data) |> json_response(200)
+    assert first |> next() |> post(path, %{data_url: snapshot()}) |> json_response(200)
+    assert first |> next() |> get(path) |> json_response(200)
+    token = get_session(first, :guest_review_token)
+    session = Repo.get_by!(GuestReviewSession, token_hash: Feedback.hash(token))
 
-    assert owner |> next() |> get(path) |> json_response(200) |> get_in(["data", "data_url"]) ==
-             data.data_url
+    Repo.update!(
+      Ecto.Changeset.change(session, expires_at: DateTime.add(DateTime.utc_now(), -1, :second))
+    )
 
-    other = visitor() |> post("/demo/comments", attrs())
-    assert other |> next() |> get(path) |> json_response(404)
-    assert other |> next() |> post(path, data) |> json_response(404)
-
-    assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
-      owner |> next() |> put_private(:plug_skip_csrf_protection, false) |> post(path, data)
-    end
-
-    saved = owner |> next() |> post("/signup", signup_attrs())
-    assert saved |> next() |> get(path) |> json_response(200)
-    account = Accounts.current(get_session(saved, :account_token))
-    assert {:ok, _} = Threads.delete(Accounts.demo_project(account), thread["id"])
-    assert saved |> next() |> get(path) |> json_response(404)
+    assert first |> next() |> get(path) |> json_response(404)
+    assert Threads.get(p, thread["id"])
+    assert Fluently.Snapshots.get(p, thread["id"])
   end
 
-  test "same-origin demo works on an alternate app address, including snapshots and reload" do
-    conn = %{visitor() | host: "127.0.0.1", scheme: :http, port: 4000}
-    conn = put_req_header(conn, "origin", "http://127.0.0.1:4000")
-    saved = post(conn, "/demo/comments", attrs())
+  test "same-origin aliases still canonicalize storage to the shared project", %{project: p} do
+    conn = %{visitor() | host: "127.0.0.1", port: 4000}
+
+    saved =
+      conn |> put_req_header("origin", "http://127.0.0.1:4000") |> post("/demo/comments", attrs())
+
     thread = json_response(saved, 201)["data"]
     assert thread["page"] == "http://127.0.0.1:4000/"
-    account = Accounts.current(get_session(saved, :account_token))
-
-    assert Threads.get(Accounts.demo_project(account), thread["id"]).page ==
-             "http://127.0.0.1:4000/"
-
-    reloaded =
-      saved
-      |> next_alias()
-      |> get("/demo/comments?page=http%3A%2F%2F127.0.0.1%3A4000%2F")
-      |> json_response(200)
-
-    assert [found] = reloaded["data"]
-    assert found["id"] == thread["id"]
-    assert found["page"] == thread["page"]
-    path = "/demo/comments/#{thread["id"]}/snapshot"
-
-    assert saved
-           |> next_alias()
-           |> post(path, %{data_url: Fluently.FeedbackFixtures.snapshot()})
-           |> json_response(200)
-
-    assert saved |> next_alias() |> get(path) |> json_response(200)
-
-    assert saved
-           |> next_alias()
-           |> put_req_header("origin", "http://localhost:4000")
-           |> post("/demo/comments", attrs())
-           |> json_response(403)
-  end
-
-  defp next_alias(conn) do
-    %{next(conn) | host: "127.0.0.1", scheme: :http, port: 4000}
-    |> put_req_header("origin", "http://127.0.0.1:4000")
+    assert Threads.get(p, thread["id"]).page == p.origin <> "/"
   end
 end

@@ -102,7 +102,7 @@ defmodule Fluently.FeedbackTest do
     assert {:ok, _} = Feedback.delete_project(ctx.owner, ctx.project.id)
     assert Repo.aggregate(Fluently.Feedback.Thread, :count) == 0
     assert Repo.aggregate(Fluently.Feedback.Message, :count) == 0
-    assert Repo.aggregate(Fluently.Feedback.Reviewer, :count) == 0
+    assert Repo.aggregate(Fluently.Feedback.ProjectUser, :count) == 0
   end
 
   test "malformed URLs fail validation without raising", ctx do

@@ -52,7 +52,7 @@
       </h1>
       <p class="auth-intro">
         {if @mode == :signup,
-          do: "Keep access to your feedback and bring Fluently to your own website.",
+          do: "Bring Fluently to your own website.",
           else: "Sign in to your workspace and pick up where you left off."}
       </p>
       <div :if={@error} class="auth-error" role="alert" id="account-error">{@error}</div>
@@ -113,7 +113,7 @@
       <div class="auth-form-note">
         <span class="auth-note-mark" aria-hidden="true">↳</span>
         <p :if={@mode == :signup}>
-          Your feedback stays attached. The Fluently team can read and reply to comments you leave on this website.
+          Guest feedback stays with its project. Creating an account does not claim or link your guest reviews.
         </p>
         <p :if={@mode == :login}>
           Signing in opens your account’s saved feedback. Feedback from a separate guest session won’t be transferred.

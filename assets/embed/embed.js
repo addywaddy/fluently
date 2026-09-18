@@ -55,6 +55,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     const live = el('div', '', 'sr'); live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite')
     shadow.append(pins, outline, hint, bar, panel, live, menu)
     document.body.append(host)
+    let reviewIdentity = 'Guest'
     let armed = false, threads = [], page = pageURL(), draft = null, selected = null, filter = 'open', frame = null, loading = false
     let panelMode = '', lastFocus = null, busy = false, countLabel = '', destroyed = false, selectedAnchor = null
     let commenting = false, menuSnapshot = null, menuFocus = null, logoRotation = 0
@@ -84,7 +85,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     const exit = button('Exit', () => { try { sessionStorage.removeItem(storageKey) } catch {} ; token = null; cleanup() })
     controls.append(addButton, listButton, exit)
     bar.append(controls, toggle)
-    const saveDemo = el('a', 'Keep access')
+    const saveDemo = el('a', 'Create account')
     if (demo) {
       saveDemo.href = '/signup'; saveDemo.style.cssText = 'color:#1c597c;padding:8px'
       controls.append(saveDemo)
@@ -244,6 +245,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
         let offset = 0, result, all = []
         do {
           result = await api(`/comments?page=${encodeURIComponent(requestedPage)}&offset=${offset}`)
+          if (demo && result.identity) reviewIdentity = result.identity.name
           if (demo && result.registered) { saveDemo.textContent = 'My workspace'; saveDemo.href = '/app' }
           all.push(...result.data); offset = result.next_offset
         } while (offset !== null && all.length < 1000)
@@ -271,7 +273,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       select.value = filter
       select.addEventListener('change', () => {filter = select.value; renderPins(); showList()})
       panel.append(select, el('p', 'Pins are hidden when their target is absent, ambiguous, excluded, or outside this view.', 'muted'))
-      if (demo) panel.append(el('p', 'Feedback goes to the Fluently team. You see only your own conversations. Sign up to keep access; clearing cookies or letting your guest session expire loses access.', 'muted'))
+      if (demo) panel.append(el('p', 'Feedback goes to the Fluently team. Guest access lasts 14 days in this browser; clearing cookies loses access. Creating an account does not claim guest feedback.', 'muted'))
       const matching = threads.filter(t => t.status === filter)
       if (!matching.length) panel.append(el('p', 'No threads yet. Add a comment to an element on this page.'))
       for (const [i, thread] of matching.entries()) {
@@ -372,7 +374,8 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       setArmed(false); openPanel('New comment', 'draft'); draft = {anchor, context: snapshot.context, page: snapshot.page}
       selectedAnchor = anchor; restoreOutline()
       panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
-      if (demo) panel.append(el('p', 'Share feedback with the Fluently team. Other visitors cannot see your comments. We remember you with a cookie; sign up to keep access.', 'muted'))
+      if (demo) panel.append(el('p', `Commenting as ${reviewIdentity}`, 'muted'))
+      if (demo) panel.append(el('p', 'Share feedback with the Fluently team. Other visitors cannot see your comments. Guest access uses a browser cookie and is separate from a Fluently account.', 'muted'))
       if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
       let image = null, capturing = false
       const snapshotBox = el('div'), preview = el('div'), snapshotError = errorBox()

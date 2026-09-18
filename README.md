@@ -62,12 +62,15 @@ The inbox supports replies, resolve/reopen, snapshots, deletion and pagination. 
 add or revoke admins by their existing registered account email; admins cannot manage
 credentials, grant access or delete the project.
 
-The first successful comment creates an anonymous identity, remembered by a signed
-HttpOnly, SameSite cookie. **Keep access** opens `/signup`, upgrading that same identity.
+The first successful comment creates a project-scoped guest user and a random review
+session, remembered by a signed HttpOnly, SameSite cookie. It creates no account or workspace.
 Guest access expires after 14 days (or is lost if cookies are cleared), but submitted
-feedback stays in the owner’s project. Signup removes guest expiry; registered sessions
-last 30 days. Login does not merge a different anonymous session. One active account
-session is supported. Email verification and password recovery are not implemented yet.
+feedback stays in the owner's project. Signup creates an independent account and never
+claims earlier feedback. The current browser can retain its separate guest session after
+signup/login; signing in on another device does not recover guest feedback. Project members
+comment as their account; registered nonmembers comment as unlinked guests. Registered
+sessions last 30 days, with one active account session. Email verification and password
+recovery are not implemented yet.
 
 `FLUENTLY_PROJECT_ID` selects the first-party project; it must also have `public_feedback`
 enabled in the database. The migration enables the existing local and production Fluently
@@ -165,7 +168,8 @@ The landing widget uses `/demo/comments/:thread_id/snapshot` with its cookie/CSR
 
 ## Architecture and deployment
 
-`Fluently.Accounts` owns anonymous-to-registered identities, account sessions and demo retention;
+`Fluently.Accounts` owns registered credentials, account sessions and legacy demo cleanup;
+`Fluently.GuestReviews` owns independent first-party guest capabilities;
 `Fluently.Feedback` owns workspace/project credentials and reviewer sessions;
 `Fluently.Threads` owns scoped conversations; `Fluently.Feedback.Anchor` validates context.
 `assets/embed/anchor.mjs` handles DOM capture/resolution independently of widget UI.

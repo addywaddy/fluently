@@ -53,7 +53,8 @@ defmodule FluentlyWeb.PublicFeedbackTest do
     other = json_response(second, 201)["data"]
     assert thread["project_id"] == p.id
     assert other["project_id"] == p.id
-    assert is_nil(account(first).demo_project_id)
+    assert is_nil(account(first))
+    assert Repo.aggregate(Fluently.Accounts.Account, :count) == 0
     assert length(Threads.list(p, %{})) == 2
     assert visitor() |> get("/demo/comments") |> json_response(200) |> Map.fetch!("data") == []
     listed = first |> next() |> get("/demo/comments") |> json_response(200)
@@ -183,26 +184,27 @@ defmodule FluentlyWeb.PublicFeedbackTest do
     assert admin_conn |> get("/demo/comments") |> json_response(200) |> Map.fetch!("data") == []
   end
 
-  test "signup retains reviewer; guest expiry retains owner feedback", %{project: p} do
+  test "signup is independent and guest expiry retains owner feedback", %{project: p} do
     first = comment()
-    a = account(first)
+    guest_token = get_session(first, :guest_review_token)
+    guest = Fluently.GuestReviews.current(p, guest_token)
+    {registered, _} = register("jamie@example.com")
+    refute registered.user_id == guest.user_id
+    assert is_nil(registered.feedback_reviewer_id)
 
-    {:ok, {registered, _}} =
-      Accounts.register(a, %{
-        name: "Jamie",
-        email: "jamie@example.com",
-        password: "long enough passphrase"
-      })
+    session =
+      Repo.get_by!(Fluently.Feedback.GuestReviewSession, token_hash: Feedback.hash(guest_token))
 
-    assert registered.feedback_reviewer_id == a.feedback_reviewer_id
-    assert is_nil(registered.expires_at)
-    second = comment()
-    b = account(second)
-    Repo.update!(Ecto.Changeset.change(b, expires_at: DateTime.add(DateTime.utc_now(), -1, :day)))
-    assert {:ok, 1} = Accounts.prune_expired()
-    assert length(Threads.list(p, %{})) == 2
-    assert Repo.get(Fluently.Feedback.Reviewer, b.feedback_reviewer_id)
-    assert is_nil(Repo.get(Fluently.Accounts.Account, b.id))
+    Repo.update!(
+      Ecto.Changeset.change(session, expires_at: DateTime.add(DateTime.utc_now(), -1, :day))
+    )
+
+    assert is_nil(Fluently.GuestReviews.current(p, guest_token))
+    assert length(Threads.list(p, %{})) == 1
+    assert Repo.get(Fluently.Feedback.ProjectUser, guest.id)
+
+    assert first |> next() |> get("/demo/comments") |> json_response(200) |> Map.fetch!("data") ==
+             []
   end
 
   test "invite tokens cannot bypass visitor visibility; owner read key can see all", %{
@@ -238,22 +240,23 @@ defmodule FluentlyWeb.PublicFeedbackTest do
            |> json_response(403)
   end
 
-  test "previously private demo is never shared when switching to owner feedback", %{project: p} do
-    Application.delete_env(:fluently, :feedback_project_id)
-    legacy = comment()
-    a = account(legacy)
-    old = json_response(legacy, 201)["data"]
-    Application.put_env(:fluently, :feedback_project_id, p.id)
-    fresh = legacy |> next() |> post("/demo/comments", attrs())
+  test "legacy private projects are not exposed in the shared inbox", %{project: p} do
+    {:ok, workspace, _} = Feedback.create_workspace("Legacy private demo")
+
+    {:ok, legacy, _} =
+      Feedback.create_project(workspace, %{name: "Private", origin: "https://example.com"})
+
+    {:ok, identity} = Feedback.create_project_user(legacy, %{name: "Guest"})
+    {:ok, old} = Threads.create(legacy, identity, attrs())
+    fresh = comment()
     assert json_response(fresh, 201)["data"]["project_id"] == p.id
-    assert account(fresh).demo_project_id == a.demo_project_id
-    assert Threads.get(Feedback.project(a.demo_project_id), old["id"])
+    assert Threads.get(legacy, old.id)
     assert length(Threads.list(p, %{})) == 1
   end
 
   test "missing or unapproved configured project fails closed", %{project: p} do
     Repo.update!(Ecto.Changeset.change(p, public_feedback: false))
-    assert comment() |> json_response(422)
+    assert comment() |> json_response(404)
     assert Repo.aggregate(Fluently.Accounts.Account, :count) == 0
   end
 

@@ -22,6 +22,7 @@ defmodule Fluently.SQLiteConcurrencyTest do
       Sandbox.unboxed_run(Repo, fn ->
         Feedback.delete_project(owner, project.id)
         Repo.delete!(owner)
+        Repo.delete!(Repo.get!(Fluently.Accounts.User, reviewer.user_id))
       end)
     end)
 

@@ -2,10 +2,11 @@ defmodule Fluently.Snapshots do
   @moduledoc "Small, immutable PNG attachments. Access always goes through the project boundary."
   import Ecto.Query
   alias Fluently.{Repo, Threads}
-  alias Fluently.Feedback.{Reviewer, Snapshot}
+  alias Fluently.Feedback.{ProjectUser, Snapshot}
 
   @max_bytes 204_800
-  def attach(project, %Reviewer{project_id: pid} = reviewer, id, data) when pid == project.id do
+  def attach(project, %ProjectUser{project_id: pid} = reviewer, id, data)
+      when pid == project.id do
     Repo.transaction(fn ->
       thread = Threads.get(project, id) || Repo.rollback(:not_found)
       if thread.reviewer_id != reviewer.id, do: Repo.rollback(:not_found)
