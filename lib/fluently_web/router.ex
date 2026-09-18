@@ -38,6 +38,8 @@ defmodule FluentlyWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/review/connect", ReviewConnectController, :show
+    post "/review/connect", ReviewConnectController, :create
     get "/signup", AccountController, :signup
     post "/signup", AccountController, :register
     get "/login", AccountController, :login
@@ -62,6 +64,8 @@ defmodule FluentlyWeb.Router do
     pipe_through :api
     options "/:id/*path", FeedbackAPIController, :options
     post "/:id/sessions", FeedbackAPIController, :session
+    post "/:id/account-sessions", FeedbackAPIController, :account_session
+    delete "/:id/session", FeedbackAPIController, :end_session
     get "/:id/comments", FeedbackAPIController, :index
     post "/:id/comments", FeedbackAPIController, :create
     get "/:id/comments/:thread_id", FeedbackAPIController, :show

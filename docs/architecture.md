@@ -175,3 +175,38 @@ are additional browser protections, not authentication. Authorized callers can f
 feedback in their own project, and claims about a page are not attestation of provenance.
 Cookie-authenticated first-party writes retain CSRF protection. Rate limits use only the
 client address supplied by the explicitly trusted single Kamal ingress (see deployment).
+
+
+## Account reviewing across customer domains (2026-09-18)
+
+Use an explicit top-level redirect and confirmation on Fluently, rather than third-party
+cookies or automatic account detection. The SDK creates a random state and SHA-256 PKCE
+challenge, keeping the verifier in per-tab session storage. The server validates the return
+URL against the project's exact allowed origin, stores a ten-minute connection request in
+its signed browser session, and preserves it through login. Confirmation requires CSRF and
+matching state. Membership is by project ID, never origin equality.
+
+The return URL is used only for this navigation and temporarily held in the signed
+connection cookie, not stored with feedback. It is filtered from application logs. The
+SDK also keeps the original URL locally to restore its fragment after validation.
+
+The callback carries only a random 90-second, single-use authorization code and state in
+the fragment. The SDK removes those before API access, validates local state/session context,
+and exchanges the code plus verifier with credentials omitted. The database transaction
+consumes the code atomically. No long-lived account or review credential is put in a URL.
+Nonmembers get only a generic guest result; no identity is disclosed to the customer domain.
+A guest invitation remains necessary for nonmember review access.
+
+Account review grants store only hashed codes/tokens and bind to the account login hash,
+project credential version and exact membership row. Every request checks expiry, current
+login and membership, including the linked ProjectUser. Revoke/regrant cannot revive a grant.
+Only a successfully authorized grant sets the virtual `account_member` flag that allows
+all-thread visibility in public-feedback projects. Existing guest tokens remain guest-scoped.
+These grants cannot authenticate to the dashboard and never link earlier guest authors.
+Expired grants are pruned hourly; Exit deletes the current account grant.
+
+Host session changes require the documented `data-session-key` and/or
+`fluently:identity-changed` integration. The opaque key stays local and is distinct from
+future pseudonymous customer-reference metadata. A changed key rejects pending connections,
+discards cached credentials and ends the widget; responses after teardown cannot restore it.
+The host is trusted code with access to its own session storage, not an adversarial sandbox.

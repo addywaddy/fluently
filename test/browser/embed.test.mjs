@@ -85,7 +85,7 @@ test('WebKit snapshots embed used webfonts without credentials or host styleshee
   })
   const server = createServer((req, res) => {
     if (req.url === '/embed.js') res.writeHead(200, {'Content-Type': 'text/javascript'}).end(bundle)
-    else if (req.url.startsWith('/demo/comments')) res.writeHead(200, {'Content-Type': 'application/json'}).end('{"data":[],"registered":false}')
+    else if (req.url.startsWith('/demo/comments')) res.writeHead(200, {'Content-Type': 'application/json'}).end('{"data":[],"registered":false,"next_offset":null}')
     else res.writeHead(200, {'Content-Type': 'text/html', 'Set-Cookie': 'private_session=do-not-send; Path=/; HttpOnly'}).end(`
       <!doctype html><meta name="csrf-token" content="test"><link rel="stylesheet" href="${assetOrigin}/fonts.css">
       <style>body {margin: 40px}</style>

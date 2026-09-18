@@ -18,11 +18,11 @@ defmodule FluentlyWeb.ManageControllerTest do
     conn = recycle(conn) |> get(redirected_to(conn))
     doc = conn |> html_response(200) |> LazyHTML.from_document()
     assert Enum.any?(LazyHTML.query(doc, "#delete-project input"))
-    assert Enum.any?(LazyHTML.query(doc, "a[target=_blank]"))
+    assert Enum.any?(LazyHTML.query(doc, ~s(a[href*="#fluently="])))
     [p] = Feedback.projects(workspace)
     conn = recycle(conn) |> get("/app/projects/#{p.id}")
     doc = conn |> html_response(200) |> LazyHTML.from_document()
-    refute Enum.any?(LazyHTML.query(doc, "a[target=_blank]"))
+    refute Enum.any?(LazyHTML.query(doc, ~s(a[href*="#fluently="])))
     assert length(Feedback.projects(workspace)) == 1
   end
 

@@ -44,6 +44,7 @@ defmodule FluentlyWeb.AccountController do
     do: conn |> put_status(401) |> render_form(:login, "Enter your email and password.")
 
   defp sign_in(conn, token) do
+    review_connect = get_session(conn, :review_connect)
     guest_token = get_session(conn, :guest_review_token) || get_session(conn, :account_token)
 
     guest_token =
@@ -54,7 +55,8 @@ defmodule FluentlyWeb.AccountController do
     |> clear_session()
     |> put_session(:account_token, token)
     |> put_session(:guest_review_token, guest_token)
-    |> redirect(to: ~p"/app")
+    |> put_session(:review_connect, review_connect)
+    |> redirect(to: if(review_connect, do: ~p"/review/connect", else: ~p"/app"))
   end
 
   defp render_form(conn, mode, error \\ nil),

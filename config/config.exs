@@ -81,7 +81,11 @@ config :phoenix, :filter_parameters, [
   "authorization",
   "body",
   "name",
-  "data_url"
+  "data_url",
+  "code",
+  "verifier",
+  "state",
+  "return_to"
 ]
 
 config :esbuild, :embed,

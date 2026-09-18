@@ -53,7 +53,10 @@ defmodule Fluently.GuestReviews do
                 project_user_id: identity.id,
                 token_hash: Feedback.hash(token),
                 expires_at: Enum.min([account.expires_at, account.session_expires_at], DateTime)
-              }, on_conflict: :nothing, conflict_target: :token_hash)
+              },
+              on_conflict: :nothing,
+              conflict_target: :token_hash
+            )
 
             identity
           end)

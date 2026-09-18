@@ -2,9 +2,9 @@ defmodule FluentlyWeb.FeedbackAPIController do
   use FluentlyWeb, :controller
   alias Fluently.{Feedback, Threads, RateLimit}
   plug :project_boundary
-  plug :authenticate when action not in [:options, :session]
+  plug :authenticate when action not in [:options, :session, :account_session]
 
-  plug :thread_boundary when action not in [:options, :session]
+  plug :thread_boundary when action not in [:options, :session, :account_session]
 
   def options(conn, _), do: send_resp(conn, 204, "")
 
@@ -30,11 +30,50 @@ defmodule FluentlyWeb.FeedbackAPIController do
     end
   end
 
+  def account_session(conn, params) do
+    if get_req_header(conn, "origin") == [conn.assigns.project.origin] and
+         RateLimit.allow?({:account_exchange, conn.remote_ip}, 20) and
+         RateLimit.allow?({:project_account_exchange, conn.assigns.project.id}, 60) do
+      case Fluently.AccountReviews.exchange(
+             conn.assigns.project,
+             params["code"],
+             params["verifier"]
+           ) do
+        {:ok, %{token: token, identity: user}} ->
+          json(conn, %{
+            token: token,
+            expires_in: 86_400,
+            reviewer: %{id: user.id, name: user.name, kind: "account"}
+          })
+
+        _ ->
+          error(
+            conn,
+            401,
+            "Review connection expired or unavailable. Connect again or use a guest invitation."
+          )
+      end
+    else
+      error(conn, 403, "Review connection unavailable")
+    end
+  end
+
+  def end_session(conn, _) do
+    ["Bearer " <> token] = get_req_header(conn, "authorization")
+    Fluently.AccountReviews.revoke(conn.assigns.project, token)
+    send_resp(conn, 204, "")
+  end
+
   def index(conn, params) do
     if is_nil(params["status"]) or params["status"] in ["open", "resolved"] do
       threads = Threads.list(conn.assigns.project, params, scope(conn))
 
       json(conn, %{
+        identity:
+          if(conn.assigns.reviewer,
+            do: %{name: conn.assigns.reviewer.name, kind: conn.assigns.reviewer.kind},
+            else: nil
+          ),
         data: Enum.map(threads, &Threads.serialize(&1, conn.assigns.reviewer)),
         next_offset:
           if(length(threads) == 100, do: Threads.offset(params["offset"]) + 100, else: nil)
@@ -180,9 +219,10 @@ defmodule FluentlyWeb.FeedbackAPIController do
   end
 
   defp scope(conn) do
-    if conn.assigns.project.public_feedback && conn.assigns.reviewer,
-      do: conn.assigns.reviewer.id,
-      else: :all
+    if conn.assigns.project.public_feedback && conn.assigns.reviewer &&
+         not conn.assigns.reviewer.account_member,
+       do: conn.assigns.reviewer.id,
+       else: :all
   end
 
   defp thread_boundary(conn, _) do

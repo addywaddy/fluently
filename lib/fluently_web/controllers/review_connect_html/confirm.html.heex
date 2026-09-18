@@ -1,0 +1,19 @@
+<main class="manage">
+  <h1>Continue with Fluently</h1>
+  <p>You are signed in as {@account.name}.</p>
+  <%= if @member do %>
+    <p>Comment as {@account.name} on <strong>{@project.name}</strong> at {@project.origin}.</p>
+    <p>
+      The website will receive your project display name and review access. Earlier guest comments stay separate.
+    </p>
+  <% else %>
+    <p>
+      This account is not a member of this project. Your account identity will not be shared with the website. Use a review invitation to continue as a guest.
+    </p>
+  <% end %>
+  <.form for={@form} action={~p"/review/connect"} id="review-connect">
+    <input type="hidden" name="state" value={@state} />
+    <button :if={@member} class="button" name="action" value="connect">Continue as {@account.name}</button>
+    <button class="button" name="action" value="guest">Return to website</button>
+  </.form>
+</main>

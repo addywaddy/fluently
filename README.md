@@ -53,6 +53,44 @@ Guests share project-wide review access; there are no individual guest roles in 
 
 On customer websites, no invitation/session means no widget or feedback requests. Merely viewing the public snippet gives no read/write access. The host website must be trusted: its scripts can access same-page session storage. The SDK does not bypass host-site authentication.
 
+## Review with a Fluently account
+
+Project owners and explicitly added admins can use **Review on website with Fluently**
+in the project dashboard, or **Continue with Fluently** in the widget. This opens Fluently
+in the same tab, asks for login if needed, and asks you to confirm your identity before
+returning to the customer website. Third-party cookies are not required. A project member
+comments with their account's display name; a nonmember returns to guest reviewing using
+their invitation, without sharing their account name, email or account ID. Earlier guest
+comments are never merged. The composer shows who is commenting before posting.
+
+Account review sessions last up to 24 hours. Fluently logout, another login, account-session
+expiry, credential rotation, membership removal, or **Exit** revoke access. An account
+review session never grants dashboard access. The host page and its scripts must be trusted,
+just as for invitation tokens.
+
+On customer sites with login/logout or account switching, supply an opaque, non-sensitive
+`data-session-key` on the embed script. Change it whenever the host login session changes,
+including logout. The SDK checks it across reloads and observes changes in SPAs. It stays
+in browser session storage and is not sent to Fluently; it is not a customer identifier or
+authorization credential. Sites without host accounts can omit it.
+
+```html
+<script defer src="https://fluently.now/embed.js"
+  data-project="PUBLIC_PROJECT_UUID" data-session-key="OPAQUE_HOST_SESSION_NONCE"></script>
+```
+
+For an immediate logout/account-switch notification, dispatch this **before** replacing
+host-user content (also change the session key for subsequent page loads):
+
+```javascript
+window.dispatchEvent(new Event('fluently:identity-changed'));
+```
+
+This clears local review state and attempts server revocation of account review access.
+If offline, local credentials are still removed; server expiry/login revocation remains
+in force. Arbitrary host authentication changes cannot be inferred without this integration.
+Reopen the review link to start a new session.
+
 ## Dogfooding on Fluently
 
 The landing widget sends feedback to the **Fluently** project. Visitors see only threads

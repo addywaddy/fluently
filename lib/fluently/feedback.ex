@@ -151,6 +151,13 @@ defmodule Fluently.Feedback do
   end
 
   def authorize(p, token) do
+    case Fluently.AccountReviews.authorize(p, token) do
+      {:ok, identity} -> {:ok, identity}
+      _ -> authorize_guest(p, token)
+    end
+  end
+
+  defp authorize_guest(p, token) do
     with {:ok, %{project: id, reviewer: rid, version: version}} <-
            Phoenix.Token.verify(FluentlyWeb.Endpoint, "review-session-v1", token || "",
              max_age: 86_400

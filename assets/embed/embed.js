@@ -1,3 +1,4 @@
+import {startConnection, consumeConnection} from './account-connect.mjs'
 import {capture, resolve, context, pageURL, visible, excluded} from './anchor.mjs'
 import {placement} from './placement.mjs'
 import {captureSnapshot} from './snapshot.mjs'
@@ -9,15 +10,35 @@ const project = script?.dataset.project
 if ((demo || project) && !document.querySelector('fluently-feedback')) {
   const service = new URL(script.src).origin
   const storageKey = `fluently:${service}:${project}`
-  let invitation = demo ? null : new URLSearchParams(location.hash.slice(1)).get('fluently')
-  if (invitation) {
-    const fragment = new URLSearchParams(location.hash.slice(1))
-    fragment.delete('fluently')
+  const connectKey = storageKey + ':connect'
+  const hostKey = script.dataset.sessionKey || ''
+  const fragment = new URLSearchParams(location.hash.slice(1))
+  let invitation = demo ? null : fragment.get('fluently')
+  const accountEntry = !demo && fragment.get('fluently_account') === '1'
+  const connectionCode = !demo && fragment.get('fluently_code')
+  const connectionState = !demo && fragment.get('fluently_state')
+  const connectionResult = !demo && fragment.get('fluently_result')
+  if (!demo && ['fluently', 'fluently_account', 'fluently_code', 'fluently_state', 'fluently_result'].some(key => fragment.has(key))) {
+    for (const key of ['fluently', 'fluently_account', 'fluently_code', 'fluently_state', 'fluently_result']) fragment.delete(key)
     history.replaceState(history.state, '', location.pathname + location.search + (fragment.size ? '#' + fragment : ''))
   }
   let token = null
-  try { if (!demo) token = sessionStorage.getItem(storageKey) } catch { /* memory-only session */ }
-  if (demo || invitation || token) initialize().catch(() => console.warn('Fluently could not initialize.'))
+  try {
+    if (!demo) {
+      const stored = sessionStorage.getItem(storageKey)
+      if (stored?.startsWith('{')) { const saved = JSON.parse(stored); if (saved.hostKey === hostKey) token = saved.token; else { sessionStorage.removeItem(storageKey); revokeToken(saved.token) } }
+      else if (!hostKey) token = stored // pre-account guest sessions
+    }
+  } catch { /* memory-only session */ }
+  if (demo || invitation || token || accountEntry || connectionState) initialize().catch(() => console.warn('Fluently could not initialize.'))
+
+  function revokeToken(value) {
+    if (!value || demo) return
+    fetch(`${service}/api/projects/${encodeURIComponent(project)}/session`, {
+      method: 'DELETE', mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer',
+      headers: {Authorization: `Bearer ${value}`}, keepalive: true
+    }).catch(() => {})
+  }
 
   async function initialize() {
     if (!document.body) await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once: true}))
@@ -55,13 +76,14 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     const live = el('div', '', 'sr'); live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite')
     shadow.append(pins, outline, hint, bar, panel, live, menu)
     document.body.append(host)
-    let reviewIdentity = 'Guest'
+    let reviewIdentity = 'Guest', identityReady = false
     let armed = false, threads = [], page = pageURL(), draft = null, selected = null, filter = 'open', frame = null, loading = false
     let panelMode = '', lastFocus = null, busy = false, countLabel = '', destroyed = false, selectedAnchor = null
     let commenting = false, menuSnapshot = null, menuFocus = null, logoRotation = 0
     const announce = text => { live.textContent = text }
     const errorBox = () => { const node = el('p', '', 'error'); node.setAttribute('role', 'alert'); return node }
     const toggle = button('', () => setCommenting(!commenting), 'launcher')
+    toggle.disabled = true
     toggle.setAttribute('aria-label', 'Commenting: off')
     toggle.title = 'Turn commenting on'
     // Inline the existing Fluently mark so embeds need no extra image/CSP request.
@@ -82,8 +104,9 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     const addButton = button('Add comment', () => setArmed(!armed))
     const controls = el('div', '', 'controls'); controls.inert = true; controls.setAttribute('aria-hidden', 'true')
     const listButton = button('Threads', () => showList())
-    const exit = button('Exit', () => { try { sessionStorage.removeItem(storageKey) } catch {} ; token = null; cleanup() })
+    const exit = button('Exit', endReview)
     controls.append(addButton, listButton, exit)
+    if (!demo) controls.append(button('Continue with Fluently', connectAccount))
     bar.append(controls, toggle)
     const saveDemo = el('a', 'Create account')
     if (demo) {
@@ -116,10 +139,10 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     }
     function setArmed(value) {
       closeContext()
-      armed = commenting && value; hint.hidden = !commenting; outline.hidden = true
+      armed = commenting && identityReady && value; hint.hidden = !commenting; outline.hidden = true
       hint.textContent = armed ? 'Click an element · Esc to cancel' : 'Right-click an element to comment, or use Add comment · Esc to exit'
       addButton.textContent = armed ? 'Cancel selection' : 'Add comment'; addButton.setAttribute('aria-pressed', String(armed))
-      if (value) { closePanel(); announce('Choose an element. Press Escape to cancel.') }
+      if (armed) { closePanel(); announce('Choose an element. Press Escape to cancel.') }
     }
     function openPanel(title, mode) {
       selectedAnchor = null; outline.hidden = true
@@ -132,6 +155,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     }
     function closePanel() { panel.hidden = true; panelMode = ''; draft = null; selected = null; selectedAnchor = null; if (lastFocus?.isConnected) lastFocus.focus({preventScroll:true}); outline.hidden = true }
     async function api(path, method = 'GET', data) {
+      if (destroyed || (!demo && (script.dataset.sessionKey || '') !== hostKey)) { endReview(); throw new Error('The website user changed. Reopen the review link.') }
       const base = demo ? `${service}/demo` : `${service}/api/projects/${encodeURIComponent(project)}`
       const response = await fetch(`${base}${path}`, {
         method, mode: demo ? 'same-origin' : 'cors', credentials: demo ? 'same-origin' : 'omit',
@@ -142,8 +166,11 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
         body: data ? JSON.stringify(data) : undefined,
         signal: AbortSignal.timeout(15000)
       })
-      const result = await response.json()
-      if (!response.ok) { const error = new Error(result.error?.message || 'Request failed'); error.status = response.status; throw error }
+      if (destroyed) throw new Error('Review session ended.')
+      const result = response.status === 204 ? {} : await response.json()
+      if (!response.ok) {
+        if (!demo && [401, 403, 404].includes(response.status) && token) { token = null; identityReady = false; threads = []; renderPins(); setCommenting(false); try { sessionStorage.removeItem(storageKey) } catch {} }
+        const error = new Error(result.error?.message || 'Request failed'); error.status = response.status; throw error }
       return result
     }
     async function submit(form, operation, error) {
@@ -155,9 +182,36 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       catch (e) { error.textContent = e.message || 'Connection failed. Please retry.' }
       finally { busy = false; buttons.forEach(b => b.disabled = false) }
     }
-    function nameForm() {
+    function saveToken(value) {
+      token = value
+      try { sessionStorage.setItem(storageKey, JSON.stringify({token, hostKey})) }
+      catch { announce('Session storage unavailable. Reopen the review link after reloading.') }
+    }
+    async function connectAccount() {
+      try {
+        const url = await startConnection({service, project, returnTo: location.href,
+          storage: sessionStorage, key: connectKey, invitation, hostKey})
+        if (!destroyed) location.assign(url)
+      } catch {
+        openPanel('Connection unavailable', 'error')
+        panel.append(el('p', 'Enable browser session storage to continue with Fluently. You can still use a guest invitation.'))
+      }
+    }
+    function endReview() {
+      if (destroyed) return
+      const previous = token
+      token = null
+      try { sessionStorage.removeItem(storageKey); sessionStorage.removeItem(connectKey) } catch {}
+      revokeToken(previous)
+      cleanup()
+    }
+    function hostIdentityChanged() { if (!demo) endReview() }
+    function nameForm(notice = '') {
       bar.hidden = true
       openPanel('Join the review', 'join')
+      if (notice) panel.append(el('p', notice, 'muted'))
+      panel.append(button('Continue with Fluently', connectAccount))
+      if (!invitation) { panel.append(el('p', 'Project members can connect their Fluently account. Guest reviewers need a current invitation link.')); return }
       panel.append(el('p', 'Choose a display name. Everyone with this project’s review link can see its feedback.'))
       const form = el('form'), label = el('label', 'Your display name'), input = el('input')
       input.required = true; input.maxLength = 80; input.autocomplete = 'nickname'; label.append(input)
@@ -167,8 +221,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
         event.preventDefault()
         submit(form, async () => {
           const result = await api('/sessions', 'POST', {token: invitation, name: input.value.trim()})
-          token = result.token; invitation = null
-          try { sessionStorage.setItem(storageKey, token) } catch { announce('Session storage unavailable. Reopen the invitation after reloading.') }
+          saveToken(result.token); reviewIdentity = result.reviewer.name; invitation = null
           bar.hidden = false; closePanel(); await refresh(true)
         }, error)
       })
@@ -245,11 +298,12 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
         let offset = 0, result, all = []
         do {
           result = await api(`/comments?page=${encodeURIComponent(requestedPage)}&offset=${offset}`)
-          if (demo && result.identity) reviewIdentity = result.identity.name
+          if (result.identity) reviewIdentity = result.identity.name
           if (demo && result.registered) { saveDemo.textContent = 'My workspace'; saveDemo.href = '/app' }
           all.push(...result.data); offset = result.next_offset
-        } while (offset !== null && all.length < 1000)
+        } while (offset != null && all.length < 1000)
         if (requestedPage !== page || destroyed) return
+        identityReady = true; toggle.disabled = false
         const previous = selected && threads.find(t => t.id === selected)
         threads = all; renderPins()
         const current = selected && threads.find(t => t.id === selected)
@@ -260,8 +314,9 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
         if (panelMode === 'list') showList(false)
         if (report) announce('Feedback loaded.')
       } catch (e) {
-        if (e.status === 401 || e.status === 403 || e.status === 404) { token = null; threads = []; renderPins(); setCommenting(false); toggle.disabled = true; try { sessionStorage.removeItem(storageKey) } catch {} ; report = true }
-        if (report) { openPanel('Feedback unavailable', 'error'); panel.append(el('p', e.message, 'error'), el('p', 'If the session expired or was revoked, reopen a current review link.')); }
+        if (destroyed) return
+        if (e.status === 401 || e.status === 403 || e.status === 404) { token = null; identityReady = false; threads = []; renderPins(); setCommenting(false); toggle.disabled = true; try { sessionStorage.removeItem(storageKey) } catch {} ; report = true }
+        if (report) { openPanel('Feedback unavailable', 'error'); if (!demo) panel.append(button('Continue with Fluently', connectAccount)); panel.append(el('p', e.message, 'error'), el('p', 'If the session expired or was revoked, reopen a current review link.')); }
       } finally { loading = false }
     }
     function showList(focus = true) {
@@ -370,11 +425,12 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       } catch (e) { announce(e.message); hint.textContent = e.message + ' · Esc to cancel' }
     }
     function beginDraft(snapshot) {
+      if (!identityReady) return
       const {anchor, element} = snapshot
       setArmed(false); openPanel('New comment', 'draft'); draft = {anchor, context: snapshot.context, page: snapshot.page}
       selectedAnchor = anchor; restoreOutline()
       panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
-      if (demo) panel.append(el('p', `Commenting as ${reviewIdentity}`, 'muted'))
+      panel.append(el('p', `Commenting as ${reviewIdentity}`, 'muted'))
       if (demo) panel.append(el('p', 'Share feedback with the Fluently team. Other visitors cannot see your comments. Guest access uses a browser cookie and is separate from a Fluently account.', 'muted'))
       if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
       let image = null, capturing = false
@@ -490,6 +546,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       if (armed || !panel.hidden) { setArmed(false); closePanel(); addButton.focus(); return }
       setCommenting(false); toggle.focus()
     }
+    window.addEventListener('fluently:identity-changed', hostIdentityChanged)
     window.addEventListener('click', choose, true)
     window.addEventListener('contextmenu', contextMenu, true)
     window.addEventListener('pointerdown', dismissContext, true)
@@ -499,8 +556,11 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     window.addEventListener('scroll', layoutChanged, true)
     window.addEventListener('resize', layoutChanged)
     window.addEventListener('blur', blur)
-    const observer = new MutationObserver(schedule)
-    observer.observe(document.body, {subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'open', 'aria-expanded', 'data-feedback-id', 'data-feedback-exclude']})
+    const observer = new MutationObserver(() => {
+      if (!demo && (script.dataset.sessionKey || '') !== hostKey) endReview()
+      else schedule()
+    })
+    observer.observe(document.documentElement, {subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'open', 'aria-expanded', 'data-feedback-id', 'data-feedback-exclude', 'data-session-key']})
     const resize = new ResizeObserver(schedule); resize.observe(document.body)
     let ticks = 0
     const timer = setInterval(() => {
@@ -511,6 +571,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       schedule()
     }, 1000)
     function cleanup() {
+      window.removeEventListener('fluently:identity-changed', hostIdentityChanged)
       destroyed = true; clearInterval(timer); observer.disconnect(); resize.disconnect(); if (frame) cancelAnimationFrame(frame)
       window.removeEventListener('click', choose, true); window.removeEventListener('contextmenu', contextMenu, true)
       window.removeEventListener('pointerdown', dismissContext, true)
@@ -518,7 +579,23 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       window.removeEventListener('pointermove', hover, true); window.removeEventListener('keydown', keydown)
       window.removeEventListener('scroll', layoutChanged, true); window.removeEventListener('resize', layoutChanged); window.removeEventListener('blur', blur); host.remove()
     }
-    if (invitation) nameForm()
+    if (connectionState) {
+      let pending
+      try { pending = consumeConnection({storage: sessionStorage, key: connectKey, state: connectionState, hostKey}) } catch {}
+      if (!pending) { nameForm('This connection expired or belongs to another browser session. Try again.'); return }
+      invitation = pending.invitation
+      if (pending.returnTo && new URL(pending.returnTo).origin === location.origin) history.replaceState(history.state, '', pending.returnTo)
+      if (connectionCode) {
+        try {
+          const result = await api('/account-sessions', 'POST', {code: connectionCode, verifier: pending.verifier})
+          saveToken(result.token); reviewIdentity = result.reviewer.name; invitation = null
+          bar.hidden = false; closePanel(); await refresh(true)
+        } catch (error) { nameForm(error.message) }
+      } else if (connectionResult === 'guest') {
+        if (token) await refresh(true)
+        else nameForm('Your Fluently identity was not shared. Continue with a guest invitation.')
+      } else nameForm('This connection is incomplete. Try again.')
+    } else if (invitation || (accountEntry && !token)) nameForm()
     else await refresh(true)
   }
 }

@@ -1,6 +1,9 @@
 <main class="manage">
   <a href={~p"/app"}>← Projects</a>
   <h1>{@project.name}</h1><p>{@project.origin}</p>
+  <p>
+    <a href={@project.origin <> "/#fluently_account=1"} rel="noreferrer" target="_blank">Review on website with Fluently ↗</a>
+  </p>
   <section :if={@owner}>
     <p :if={@project.public_feedback}>
       Public feedback is enabled for this first-party project. The landing page already includes its cookie-based widget. Invitation sessions below see only threads they started; sign in as an owner or admin to review all feedback.

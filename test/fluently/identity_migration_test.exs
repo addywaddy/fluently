@@ -88,7 +88,7 @@ defmodule Fluently.IdentityMigrationTest do
     credentials =
       query("SELECT id, password_hash, password_salt, session_hash FROM accounts ORDER BY id")
 
-    Ecto.Migrator.run(Repo, path, :up, all: true, log: false)
+    Ecto.Migrator.run(Repo, path, :up, to: 20_260_918_071_736, log: false)
 
     assert Map.new(tables, &{&1, query("SELECT * FROM #{&1}")}) == original
 
