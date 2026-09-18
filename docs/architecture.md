@@ -123,8 +123,10 @@ Privacy filtering runs before cloning, including descendants; excluded nodes and
 are omitted rather than blurred. Shadow roots, slots, unsafe SVG subtrees, canvas/video
 and frames are omitted. Reviewers must inspect the preview: this cannot identify personal
 information in unmarked prose, images or CSS-generated content. No screenshot is inferred
-from an anchor or taken automatically later. Web-font scanning is disabled and image
-fetches omit credentials/referrers; this trades fidelity for a smaller capture surface.
+from an anchor or taken automatically later. Web-font scanning embeds font families used by the filtered clone. The local vendor patch
+reads CSS (including imports) without changing host stylesheets. CSS, font and image
+fetches omit credentials/referrers and share an eight-second request deadline. Blocked
+fonts fall back to the available font stack; exclusions remain applied before cloning.
 Requests allow 300 KiB only for snapshot JSON (base64 overhead), while ordinary JSON
 requests retain 32 KiB. Raster size is limited to 200 KiB and 1200 pixels per dimension.
 

@@ -10,8 +10,8 @@ export async function captureSnapshot(element) {
     filter: snapshotNodeAllowed,
     width, height, canvasWidth: size.width, canvasHeight: size.height,
     pixelRatio: 1, backgroundColor: '#ffffff',
-    // Avoid scanning/fetching stylesheets outside the selected target.
-    skipFonts: true, includeQueryParams: true,
+    // Embed fonts used by the filtered clone; asset requests carry no cookies or referrer.
+    skipFonts: false, includeQueryParams: true,
     fetchRequestInit: {credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(8000)},
     style: {margin: '0', transform: 'none', animation: 'none', transition: 'none'}
   })

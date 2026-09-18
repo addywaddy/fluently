@@ -116,7 +116,8 @@ also disables it. These are client capture settings, not server authorization ru
 This uses vendored [html-to-image 1.11.13](https://github.com/bubkoo/html-to-image),
 which reconstructs a selected element, rather than recording browser pixels. Fonts can
 fall back, and cross-origin assets, complex CSS, SVG references and browser differences
-can affect the result. Web-font stylesheet scanning is disabled; asset fetches omit
+can affect the result. Web-font scanning embeds fonts used by the captured element where accessible. Stylesheets
+are read without changing the host page; blocked fonts fall back gracefully. Asset fetches omit
 credentials and referrers. Host CSP must allow `img-src data:` for capture and display.
 The anchor remains responsible for pin positioning.
 

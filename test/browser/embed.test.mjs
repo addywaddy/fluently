@@ -43,6 +43,7 @@ test('WebKit posts landing feedback with a real origin, CSRF token, and session 
   try {
     browser = await webkit.launch()
     const page = await browser.newPage()
+    page.setDefaultTimeout(15000)
     await page.goto(origin + '/private-path?secret=not-for-headers')
     await page.getByRole('button', {name: 'Commenting: off'}).click()
     await page.getByRole('button', {name: 'Add comment', exact: true}).click()
@@ -60,5 +61,68 @@ test('WebKit posts landing feedback with a real origin, CSRF token, and session 
   } finally {
     await browser?.close()
     await new Promise(resolve => server.close(resolve))
+  }
+})
+
+test('WebKit snapshots embed used webfonts without credentials or host stylesheet mutations', async () => {
+  const bundle = await readFile(new URL('../../priv/static/embed.js', import.meta.url))
+  const font = await readFile(new URL('../../priv/static/fonts/afacad-latin.woff2', import.meta.url))
+  let origin, assetOrigin, capturing = false
+  const requests = []
+  const assets = createServer((req, res) => {
+    if (capturing) requests.push({path: req.url, cookie: req.headers.cookie, referer: req.headers.referer})
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Cache-Control', 'no-store')
+    if (req.url === '/fonts.css' || req.url === '/nested.css') {
+      res.writeHead(200, {'Content-Type': 'text/css'}).end(req.url === '/fonts.css' ? '@import url("/nested.css");' : `
+        @font-face {font-family: CaptureFont; src: url('/used.woff2') format('woff2')}
+        @font-face {font-family: PrivateFont; src: url('/private.woff2') format('woff2')}
+        h1 {font-family: CaptureFont; font-size: 40px}
+        .private {font-family: PrivateFont}`)
+    } else {
+      res.writeHead(200, {'Content-Type': 'font/woff2'}).end(font)
+    }
+  })
+  const server = createServer((req, res) => {
+    if (req.url === '/embed.js') res.writeHead(200, {'Content-Type': 'text/javascript'}).end(bundle)
+    else if (req.url.startsWith('/demo/comments')) res.writeHead(200, {'Content-Type': 'application/json'}).end('{"data":[],"registered":false}')
+    else res.writeHead(200, {'Content-Type': 'text/html', 'Set-Cookie': 'private_session=do-not-send; Path=/; HttpOnly'}).end(`
+      <!doctype html><meta name="csrf-token" content="test"><link rel="stylesheet" href="${assetOrigin}/fonts.css">
+      <style>body {margin: 40px}</style>
+      <h1 data-feedback-id="hero">Capture this font</h1><span class="private" data-feedback-exclude>Private</span>
+      <script defer src="/embed.js" data-demo="true"></script>`)
+  })
+  await new Promise(resolve => assets.listen(0, '127.0.0.1', resolve))
+  assetOrigin = `http://127.0.0.1:${assets.address().port}`
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  origin = `http://127.0.0.1:${server.address().port}`
+  let browser
+  try {
+    browser = await webkit.launch()
+    const page = await browser.newPage()
+    page.setDefaultTimeout(15000)
+    await page.goto(origin + '/private-path?secret=hidden')
+    await page.evaluate(() => document.fonts.ready)
+    const styles = () => page.evaluate(() => Array.from(document.styleSheets, s => {
+      try {return Array.from(s.cssRules, r => r.cssText)} catch {return s.href}
+    }))
+    const before = await styles()
+    await page.getByRole('button', {name: 'Commenting: off'}).click()
+    await page.getByRole('button', {name: 'Add comment', exact: true}).click()
+    await page.locator('h1').click({position: {x: 10, y: 10}})
+    capturing = true
+    await page.getByRole('button', {name: 'Attach element snapshot'}).click()
+    await page.getByRole('button', {name: 'Remove snapshot'}).waitFor()
+    assert.deepEqual(await styles(), before)
+    assert.ok(requests.some(r => r.path === '/fonts.css'), 'Scan inaccessible stylesheet via CORS')
+    assert.ok(requests.some(r => r.path === '/used.woff2'), 'Embed the selected font')
+    assert.ok(!requests.some(r => r.path === '/private.woff2'), 'Do not embed excluded content fonts')
+    for (const request of requests) {
+      assert.equal(request.cookie, undefined)
+      assert.equal(request.referer, undefined)
+    }
+  } finally {
+    await browser?.close()
+    await Promise.all([server, assets].map(s => new Promise(resolve => s.close(resolve))))
   }
 })
