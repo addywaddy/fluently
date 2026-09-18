@@ -11,6 +11,13 @@ This is a web application written using the Phoenix web framework.
 - GitHub Actions may run Playwright tests normally; do not skip CI or disable its Playwright checks because local permission has not been granted.
 - When the user refers to "browser tests" in this context, they mean Playwright tests. Backend and SDK unit tests may run normally.
 
+### Live testing requires express permission
+
+- Do not test against a running application (local, staging, or production) without the user's express permission for that live testing.
+- This applies to every tool or method, including Playwright, Python scripts, curl/HTTP smoke checks, and interactive browser testing. Changing tools does not bypass the permission requirement.
+- General requests to implement, continue, or deploy do not authorize live testing. Use isolated backend and SDK unit tests without contacting a running application instead.
+- The existing permission for GitHub Actions test suites remains in place; it does not authorize additional ad hoc live testing.
+
 ### Phoenix v1.8 guidelines
 
 - **Always** begin your LiveView templates with `<Layouts.app flash={@flash} ...>` which wraps all inner content
