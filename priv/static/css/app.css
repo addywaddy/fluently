@@ -138,6 +138,31 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
   white-space: nowrap
 }
 
+.account-menu { position: relative; z-index: 20; }
+.account-menu summary {
+  display: grid; place-items: center; width: 42px; height: 42px;
+  border-radius: 50%; border: 1px solid #b5daf2; background: #e8f5ff;
+  color: var(--ink-blue); font-size: 15px; font-weight: 600;
+  cursor: pointer; list-style: none;
+}
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-menu summary:hover, .account-menu[open] summary { background: #d8eeff; }
+.account-menu summary:focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
+.account-dropdown {
+  position: absolute; right: 0; top: calc(100% + 12px);
+  width: min(280px, calc(100vw - 40px)); padding: 8px;
+  border: 1px solid var(--border); border-radius: 14px; background: white;
+  box-shadow: 0 12px 36px #1c3b5920;
+}
+.account-menu-identity { padding: 10px 12px 14px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.account-menu-identity strong, .account-menu-identity span { display: block; overflow-wrap: anywhere; }
+.account-menu-identity span { color: var(--muted); font-size: 12px; }
+.account-dropdown a, .account-dropdown button {
+  display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: 7px;
+  background: transparent; color: inherit; font: inherit; text-align: left;
+}
+.account-dropdown a:hover, .account-dropdown button:hover { background: var(--pale); color: var(--ink-blue); }
+
 .button {
   display: inline-flex;
   justify-content: center;

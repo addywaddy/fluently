@@ -19,8 +19,26 @@
       <span aria-hidden="true">↗</span></a>
     </nav>
     <div class="header-actions">
-      <a id="landing-login" class="button button-small" href={~p"/login"}>Log in</a>
-      <a id="landing-signup" class="button button-small button-primary" href={~p"/signup"}>Sign up</a>
+      <%= if @navigation_identity do %>
+        <details id="landing-account" class="account-menu" data-feedback-exclude>
+          <summary aria-label={"Account menu for " <> @navigation_identity.name}>
+            <span aria-hidden="true">{account_initials(@navigation_identity.name)}</span>
+          </summary>
+          <div class="account-dropdown">
+            <div class="account-menu-identity">
+              <strong>{@navigation_identity.name}</strong>
+              <span>{@navigation_identity.detail}</span>
+            </div>
+            <a id="landing-projects" href={~p"/app"}>My projects</a>
+            <.form for={%{}} action={~p"/app/logout"} id="landing-logout">
+              <button type="submit">Log out</button>
+            </.form>
+          </div>
+        </details>
+      <% else %>
+        <a id="landing-login" class="button button-small" href={~p"/login"}>Log in</a>
+        <a id="landing-signup" class="button button-small button-primary" href={~p"/signup"}>Sign up</a>
+      <% end %>
     </div>
   </header>
 
