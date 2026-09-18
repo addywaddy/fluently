@@ -210,3 +210,25 @@ Host session changes require the documented `data-session-key` and/or
 future pseudonymous customer-reference metadata. A changed key rejects pending connections,
 discards cached credentials and ends the widget; responses after teardown cannot restore it.
 The host is trusted code with access to its own session storage, not an adversarial sandbox.
+
+
+## Pseudonymous DOM references (2026-09-18)
+
+Reuse ProjectUser.external_id for immutable, project-local attribution captured during guest
+invitation exchange; never query identity or permissions by this field. A repeated value
+creates a separate User/ProjectUser on every exchange. Account review grants ignore the
+reference. Guest tokens and visibility remain unchanged; matching a reference cannot recover
+private threads or merge a guest with a registered account.
+
+The SDK reads only a configured data attribute from a unique selector after DOM readiness.
+It binds session storage and pending PKCE connections to the reference and configuration,
+alongside the host session nonce. DOM mutations and pre/post-request checks detect changes;
+removal or replacement tears down reviewing rather than silently switching authors. Missing
+references permit anonymous reviewing; invalid/ambiguous/excluded configuration blocks it.
+When no reference changes, host logout still requires the documented nonce/event integration.
+
+Serialize unverified reference metadata only for owner read keys and validated account-member
+sessions. Guest readers never receive it. References are bounded ASCII identifiers, excluded
+from request logs, and carry the owning project UUID in API responses. The value itself is
+customer-generated HMAC metadata, not a signature Fluently can verify. Signed assertions
+would require a separate trust/key-management design and remain a future extension.

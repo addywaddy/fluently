@@ -85,7 +85,8 @@ config :phoenix, :filter_parameters, [
   "code",
   "verifier",
   "state",
-  "return_to"
+  "return_to",
+  "external_ref"
 ]
 
 config :esbuild, :embed,

@@ -91,6 +91,70 @@ If offline, local credentials are still removed; server expiry/login revocation 
 in force. Arbitrary host authentication changes cannot be inferred without this integration.
 Reopen the review link to start a new session.
 
+## Pseudonymous customer references
+
+To match guest feedback to your own customers, render a project-specific opaque reference
+into one explicit data attribute. The embed reads only that attribute; it never reads
+text, form values, or arbitrary DOM content for identity.
+
+```html
+<meta id="fluently-customer" data-customer-ref="SERVER_GENERATED_HMAC">
+<script defer src="https://fluently.now/embed.js"
+  data-project="PUBLIC_PROJECT_UUID"
+  data-user-selector="#fluently-customer"
+  data-user-attribute="data-customer-ref"
+  data-session-key="OPAQUE_HOST_SESSION_NONCE"></script>
+```
+
+`data-user-selector` accepts a CSS selector, including an element ID, with exactly one match.
+`data-user-attribute` defaults to `data-fluently-user-ref` and must name a `data-*` attribute.
+References accept 1–200 ASCII letters, digits, underscores or hyphens (hex or base64url).
+The selector is limited to 256 characters. Excluded areas are never read. Invalid,
+ambiguous or excluded configuration blocks reviewing until corrected; absent elements
+or empty/missing attributes start an ordinary guest session without a reference.
+
+The reference is fixed when the guest exchanges an invitation. Adding, changing or
+removing it ends the current session, including cached credentials and pending account
+connections. Reopen an invitation to review again. Use `data-session-key` and the logout
+hook above even when a reference is absent: Fluently cannot infer a host login change
+that produces no DOM/session signal. Account-backed project members keep account authorship;
+the customer reference is not attached to their registered identity.
+
+Generate the reference **on your server**, using HMAC-SHA256 with a company-held secret
+and project-specific input. For example, in Elixir:
+
+```elixir
+# CUSTOMER_REFERENCE_SECRET is a random 32-byte key encoded as base64.
+# Generate once outside the request path and keep it in your server's secret store.
+secret = System.fetch_env!("CUSTOMER_REFERENCE_SECRET") |> Base.decode64!()
+reference =
+  :crypto.mac(:hmac, :sha256, secret, "fluently:v1:" <> project_id <> ":" <> customer_uuid)
+  |> Base.url_encode64(padding: false)
+```
+
+Use canonical UUIDs for both inputs. Never put the secret or raw customer UUID in the
+snippet or send them to Fluently. Your company can recompute references to match its
+customers; different project IDs produce different references. Rotating the secret changes
+the references and ends existing browser review sessions when the new value appears.
+A plain hash of an identifier offers less protection against guessing than a keyed HMAC.
+
+These values are **pseudonymous, unverified metadata**, not authentication: anyone with DOM
+access can copy or replace them. They never recover old threads, merge users, grant access,
+or establish identity on another device. Each invitation exchange still creates a new guest
+identity. Pseudonymous data may still be personal data for your company.
+
+Owner read API keys and authenticated project-member review sessions receive
+`messages[].author.external_ref` when present:
+
+```json
+{"value":"opaque-reference","verified":false,"scope":"PROJECT_UUID"}
+```
+
+Guest API responses omit this field, even for collaborative projects. The session endpoint
+accepts optional `external_ref`; supplying it without a valid invitation grants no access.
+Signed assertions for trusted continuity may be added later; unsigned references do not
+silently enable that behavior.
+
 ## Dogfooding on Fluently
 
 The landing widget sends feedback to the **Fluently** project. Visitors see only threads

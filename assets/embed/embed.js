@@ -1,3 +1,4 @@
+import {customerReference, hostIdentityKey} from './customer-reference.mjs'
 import {startConnection, consumeConnection} from './account-connect.mjs'
 import {capture, resolve, context, pageURL, visible, excluded} from './anchor.mjs'
 import {placement} from './placement.mjs'
@@ -7,11 +8,17 @@ import {snapshotUnavailableReason} from './snapshot-policy.mjs'
 const script = document.currentScript
 const demo = script?.dataset.demo === 'true' && new URL(script.src).origin === location.origin
 const project = script?.dataset.project
-if ((demo || project) && !document.querySelector('fluently-feedback')) {
+if ((demo || project) && !document.querySelector('fluently-feedback')) startEmbed().catch(() => console.warn('Fluently could not initialize.'))
+
+async function startEmbed() {
+  if (document.readyState === 'loading') await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once: true}))
+  if (document.querySelector('fluently-feedback')) return
   const service = new URL(script.src).origin
   const storageKey = `fluently:${service}:${project}`
   const connectKey = storageKey + ':connect'
-  const hostKey = script.dataset.sessionKey || ''
+  const currentHostKey = () => demo ? '' : hostIdentityKey(document, script.dataset)
+  const hostKey = currentHostKey()
+  const reference = demo ? {value: null} : customerReference(document, script.dataset)
   const fragment = new URLSearchParams(location.hash.slice(1))
   let invitation = demo ? null : fragment.get('fluently')
   const accountEntry = !demo && fragment.get('fluently_account') === '1'
@@ -26,8 +33,9 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
   try {
     if (!demo) {
       const stored = sessionStorage.getItem(storageKey)
-      if (stored?.startsWith('{')) { const saved = JSON.parse(stored); if (saved.hostKey === hostKey) token = saved.token; else { sessionStorage.removeItem(storageKey); revokeToken(saved.token) } }
+      if (stored?.startsWith('{')) { const saved = JSON.parse(stored); if (saved.hostKey === hostKey && reference.state !== 'invalid') token = saved.token; else { sessionStorage.removeItem(storageKey); revokeToken(saved.token) } }
       else if (!hostKey) token = stored // pre-account guest sessions
+      else if (stored) { sessionStorage.removeItem(storageKey); revokeToken(stored) }
     }
   } catch { /* memory-only session */ }
   if (demo || invitation || token || accountEntry || connectionState) initialize().catch(() => console.warn('Fluently could not initialize.'))
@@ -155,7 +163,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     }
     function closePanel() { panel.hidden = true; panelMode = ''; draft = null; selected = null; selectedAnchor = null; if (lastFocus?.isConnected) lastFocus.focus({preventScroll:true}); outline.hidden = true }
     async function api(path, method = 'GET', data) {
-      if (destroyed || (!demo && (script.dataset.sessionKey || '') !== hostKey)) { endReview(); throw new Error('The website user changed. Reopen the review link.') }
+      if (destroyed || (!demo && currentHostKey() !== hostKey)) { endReview(); throw new Error('The website user changed. Reopen the review link.') }
       const base = demo ? `${service}/demo` : `${service}/api/projects/${encodeURIComponent(project)}`
       const response = await fetch(`${base}${path}`, {
         method, mode: demo ? 'same-origin' : 'cors', credentials: demo ? 'same-origin' : 'omit',
@@ -166,7 +174,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
         body: data ? JSON.stringify(data) : undefined,
         signal: AbortSignal.timeout(15000)
       })
-      if (destroyed) throw new Error('Review session ended.')
+      if (destroyed || (!demo && currentHostKey() !== hostKey)) { endReview(); throw new Error('Review session ended.') }
       const result = response.status === 204 ? {} : await response.json()
       if (!response.ok) {
         if (!demo && [401, 403, 404].includes(response.status) && token) { token = null; identityReady = false; threads = []; renderPins(); setCommenting(false); try { sessionStorage.removeItem(storageKey) } catch {} }
@@ -210,9 +218,11 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       bar.hidden = true
       openPanel('Join the review', 'join')
       if (notice) panel.append(el('p', notice, 'muted'))
+      if (reference.state === 'invalid') { panel.append(el('p', 'The website’s customer reference configuration is invalid or ambiguous. Ask the project owner to check its selector and data attribute.', 'error')); return }
       panel.append(button('Continue with Fluently', connectAccount))
       if (!invitation) { panel.append(el('p', 'Project members can connect their Fluently account. Guest reviewers need a current invitation link.')); return }
       panel.append(el('p', 'Choose a display name. Everyone with this project’s review link can see its feedback.'))
+      if (reference.value) panel.append(el('p', 'Your website-provided customer reference will be attached as unverified metadata.', 'muted'))
       const form = el('form'), label = el('label', 'Your display name'), input = el('input')
       input.required = true; input.maxLength = 80; input.autocomplete = 'nickname'; label.append(input)
       const send = el('button', 'Start reviewing', 'primary'); send.type = 'submit'
@@ -220,7 +230,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       form.addEventListener('submit', event => {
         event.preventDefault()
         submit(form, async () => {
-          const result = await api('/sessions', 'POST', {token: invitation, name: input.value.trim()})
+          const result = await api('/sessions', 'POST', {token: invitation, name: input.value.trim(), external_ref: reference.value})
           saveToken(result.token); reviewIdentity = result.reviewer.name; invitation = null
           bar.hidden = false; closePanel(); await refresh(true)
         }, error)
@@ -557,10 +567,10 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     window.addEventListener('resize', layoutChanged)
     window.addEventListener('blur', blur)
     const observer = new MutationObserver(() => {
-      if (!demo && (script.dataset.sessionKey || '') !== hostKey) endReview()
+      if (!demo && currentHostKey() !== hostKey) endReview()
       else schedule()
     })
-    observer.observe(document.documentElement, {subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'open', 'aria-expanded', 'data-feedback-id', 'data-feedback-exclude', 'data-session-key']})
+    observer.observe(document.documentElement, {subtree: true, childList: true, attributes: true})
     const resize = new ResizeObserver(schedule); resize.observe(document.body)
     let ticks = 0
     const timer = setInterval(() => {
@@ -579,6 +589,7 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
       window.removeEventListener('pointermove', hover, true); window.removeEventListener('keydown', keydown)
       window.removeEventListener('scroll', layoutChanged, true); window.removeEventListener('resize', layoutChanged); window.removeEventListener('blur', blur); host.remove()
     }
+    if (reference.state === 'invalid') { nameForm(); return }
     if (connectionState) {
       let pending
       try { pending = consumeConnection({storage: sessionStorage, key: connectKey, state: connectionState, hostKey}) } catch {}

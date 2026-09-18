@@ -11,13 +11,25 @@ defmodule FluentlyWeb.FeedbackAPIController do
   def session(conn, params) do
     if RateLimit.allow?({:exchange, conn.remote_ip}, 20) and
          RateLimit.allow?({:project_exchange, conn.assigns.project.id}, 60) do
-      case Feedback.start_review(conn.assigns.project, params["token"], params["name"]) do
+      case Feedback.start_review(
+             conn.assigns.project,
+             params["token"],
+             params["name"],
+             params["external_ref"]
+           ) do
         {:ok, token, reviewer} ->
           json(conn, %{
             token: token,
             expires_in: 86_400,
             reviewer: %{id: reviewer.id, name: reviewer.name}
           })
+
+        {:error, :invalid_reference} ->
+          error(
+            conn,
+            422,
+            "Customer reference must contain 1–200 letters, digits, underscores or hyphens"
+          )
 
         {:error, :unauthorized} ->
           error(conn, 401, "Review invitation is invalid or expired")
@@ -74,7 +86,7 @@ defmodule FluentlyWeb.FeedbackAPIController do
             do: %{name: conn.assigns.reviewer.name, kind: conn.assigns.reviewer.kind},
             else: nil
           ),
-        data: Enum.map(threads, &Threads.serialize(&1, conn.assigns.reviewer)),
+        data: Enum.map(threads, &serialize(conn, &1)),
         next_offset:
           if(length(threads) == 100, do: Threads.offset(params["offset"]) + 100, else: nil)
       })
@@ -86,14 +98,14 @@ defmodule FluentlyWeb.FeedbackAPIController do
   def show(conn, %{"thread_id" => id}) do
     case Threads.get(conn.assigns.project, id) do
       nil -> error(conn, 404, "Not found")
-      thread -> json(conn, %{data: Threads.serialize(thread, conn.assigns.reviewer)})
+      thread -> json(conn, %{data: serialize(conn, thread)})
     end
   end
 
   def create(conn, params) do
     case Threads.create(conn.assigns.project, conn.assigns.reviewer, params) do
       {:ok, thread} ->
-        conn |> put_status(201) |> json(%{data: Threads.serialize(thread, conn.assigns.reviewer)})
+        conn |> put_status(201) |> json(%{data: serialize(conn, thread)})
 
       _ ->
         error(conn, 422, "Invalid comment, page, anchor or context")
@@ -113,7 +125,7 @@ defmodule FluentlyWeb.FeedbackAPIController do
     with project when not is_nil(project) <- conn.assigns.project,
          {:ok, _} <-
            Fluently.Snapshots.attach(project, conn.assigns.reviewer, id, params["data_url"]) do
-      json(conn, %{data: Threads.serialize(Threads.get(project, id), conn.assigns.reviewer)})
+      json(conn, %{data: serialize(conn, Threads.get(project, id))})
     else
       {:error, :invalid_image} ->
         error(conn, 422, "Use a PNG up to 200 KiB and 1200 × 1200 pixels")
@@ -146,7 +158,7 @@ defmodule FluentlyWeb.FeedbackAPIController do
           deleted_thread: result.deleted_thread,
           data:
             if(result.thread,
-              do: Threads.serialize(result.thread, conn.assigns.reviewer),
+              do: serialize(conn, result.thread),
               else: nil
             )
         })
@@ -216,6 +228,14 @@ defmodule FluentlyWeb.FeedbackAPIController do
         {:ok, reviewer} = result
         assign(conn, :reviewer, reviewer)
     end
+  end
+
+  defp serialize(conn, thread) do
+    reviewer = conn.assigns.reviewer
+
+    Threads.serialize(thread, reviewer,
+      reference_metadata: is_nil(reviewer) or reviewer.account_member
+    )
   end
 
   defp scope(conn) do

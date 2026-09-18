@@ -129,26 +129,43 @@ defmodule Fluently.Feedback do
     end)
   end
 
-  def start_review(p, key, name) do
+  def start_review(p, key, name, external_ref \\ nil)
+
+  def start_review(p, key, name, external_ref)
+      when is_nil(external_ref) or is_binary(external_ref) do
     if valid_secret?(key, p.review_hash) and
          DateTime.compare(p.review_expires_at, DateTime.utc_now()) == :gt do
-      create_project_user(p, %{name: name})
-      |> case do
-        {:ok, reviewer} ->
-          {:ok,
-           Phoenix.Token.sign(FluentlyWeb.Endpoint, "review-session-v1", %{
-             project: p.id,
-             reviewer: reviewer.id,
-             version: p.credential_version
-           }), reviewer}
+      if valid_external_ref?(external_ref) do
+        create_project_user(p, %{
+          name: name,
+          external_id: external_ref,
+          kind: if(external_ref, do: "pseudonymous", else: "guest")
+        })
+        |> case do
+          {:ok, reviewer} ->
+            {:ok,
+             Phoenix.Token.sign(FluentlyWeb.Endpoint, "review-session-v1", %{
+               project: p.id,
+               reviewer: reviewer.id,
+               version: p.credential_version
+             }), reviewer}
 
-        error ->
-          error
+          error ->
+            error
+        end
+      else
+        {:error, :invalid_reference}
       end
     else
       {:error, :unauthorized}
     end
   end
+
+  def start_review(_, _, _, _), do: {:error, :invalid_reference}
+  defp valid_external_ref?(nil), do: true
+
+  defp valid_external_ref?(value),
+    do: byte_size(value) in 1..200 and Regex.match?(~r/\A[A-Za-z0-9_-]+\z/, value)
 
   def authorize(p, token) do
     case Fluently.AccountReviews.authorize(p, token) do

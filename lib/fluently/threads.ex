@@ -139,7 +139,7 @@ defmodule Fluently.Threads do
 
   def delete_message(_, _, _, _), do: {:error, :unauthorized}
 
-  def serialize(thread, reviewer \\ nil) do
+  def serialize(thread, reviewer \\ nil, opts \\ []) do
     %{
       id: thread.id,
       project_id: thread.project_id,
@@ -167,7 +167,21 @@ defmodule Fluently.Threads do
               not is_nil(reviewer) and reviewer.project_id == thread.project_id and
                 reviewer.id == m.reviewer_id,
             created_at: m.inserted_at,
-            author: %{id: m.reviewer.id, name: m.reviewer.name, kind: m.reviewer.kind}
+            author:
+              if Keyword.get(opts, :reference_metadata, false) and m.reviewer.external_id do
+                %{
+                  id: m.reviewer.id,
+                  name: m.reviewer.name,
+                  kind: m.reviewer.kind,
+                  external_ref: %{
+                    value: m.reviewer.external_id,
+                    verified: false,
+                    scope: thread.project_id
+                  }
+                }
+              else
+                %{id: m.reviewer.id, name: m.reviewer.name, kind: m.reviewer.kind}
+              end
           }
         end)
     }
