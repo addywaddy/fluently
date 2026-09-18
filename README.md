@@ -61,7 +61,13 @@ in the same tab, asks for login if needed, and asks you to confirm your identity
 returning to the customer website. Third-party cookies are not required. A project member
 comments with their account's display name; a nonmember returns to guest reviewing using
 their invitation, without sharing their account name, email or account ID. Earlier guest
-comments are never merged. The composer shows who is commenting before posting.
+comments are never merged. The toolbar and composer show your name and initials avatar.
+Account reviewers can select **All reviews** or **My reviews** in the widget. My reviews
+means threads started under that project's Fluently account identity, including replies
+within those threads; earlier guest threads remain separate. The filter also applies to
+pins and the thread list, alongside the existing open/resolved filter. It does not change
+project permissions. API lists accept `view=all` (default) or `view=mine`; owner read keys
+have no personal author identity, so `view=mine` returns an empty list.
 
 Account review sessions last up to 24 hours. Fluently logout, another login, account-session
 expiry, credential rotation, membership removal, or **Exit** revoke access. An account

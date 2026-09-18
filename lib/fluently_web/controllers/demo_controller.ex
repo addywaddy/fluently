@@ -4,12 +4,15 @@ defmodule FluentlyWeb.DemoController do
   plug :boundary
   plug :thread_boundary
 
+  def index(conn, %{"view" => view}) when view not in [nil, "all", "mine"],
+    do: error(conn, 422, "view must be all or mine")
+
   def index(conn, params) do
     threads =
       Threads.list(
         conn.assigns.project,
         Map.put(params, "page", conn.assigns.project.origin <> "/"),
-        scope(conn)
+        list_scope(conn, params)
       )
 
     json(conn, %{
@@ -120,6 +123,12 @@ defmodule FluentlyWeb.DemoController do
   end
 
   defp identities(conn), do: Enum.reject([conn.assigns.guest, conn.assigns.identity], &is_nil/1)
+
+  defp list_scope(conn, %{"view" => "mine"}),
+    do: if(conn.assigns.identity, do: conn.assigns.identity.id, else: :none)
+
+  defp list_scope(conn, _), do: scope(conn)
+
   defp scope(%{assigns: %{member: true}}), do: :all
   defp scope(%{assigns: %{guest: %{id: id}}}), do: id
   defp scope(_), do: :none
@@ -133,7 +142,7 @@ defmodule FluentlyWeb.DemoController do
   defp identity_label(conn) do
     if conn.assigns.member,
       do: %{
-        kind: "account",
+        kind: if(conn.assigns.account, do: "account", else: "admin"),
         name: (conn.assigns.account && conn.assigns.account.name) || "Project owner"
       },
       else: %{kind: "guest", name: "Guest"}

@@ -66,6 +66,7 @@ defmodule FluentlyWeb.CustomerReferenceTest do
       |> json_response(200)
 
     refute hd(hd(response["data"])["messages"])["author"]["external_ref"]
+    assert response["identity"] == %{"name" => "Other guest", "kind" => "guest"}
 
     {:ok, {account, _}} =
       Fluently.Accounts.register(nil, %{

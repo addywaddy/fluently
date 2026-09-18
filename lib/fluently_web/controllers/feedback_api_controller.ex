@@ -77,13 +77,17 @@ defmodule FluentlyWeb.FeedbackAPIController do
   end
 
   def index(conn, params) do
-    if is_nil(params["status"]) or params["status"] in ["open", "resolved"] do
-      threads = Threads.list(conn.assigns.project, params, scope(conn))
+    if (is_nil(params["status"]) or params["status"] in ["open", "resolved"]) and
+         params["view"] in [nil, "all", "mine"] do
+      threads = Threads.list(conn.assigns.project, params, list_scope(conn, params))
 
       json(conn, %{
         identity:
           if(conn.assigns.reviewer,
-            do: %{name: conn.assigns.reviewer.name, kind: conn.assigns.reviewer.kind},
+            do: %{
+              name: conn.assigns.reviewer.name,
+              kind: if(conn.assigns.reviewer.account_member, do: "account", else: "guest")
+            },
             else: nil
           ),
         data: Enum.map(threads, &serialize(conn, &1)),
@@ -91,7 +95,7 @@ defmodule FluentlyWeb.FeedbackAPIController do
           if(length(threads) == 100, do: Threads.offset(params["offset"]) + 100, else: nil)
       })
     else
-      error(conn, 422, "status must be open or resolved")
+      error(conn, 422, "status must be open or resolved; view must be all or mine")
     end
   end
 
@@ -237,6 +241,12 @@ defmodule FluentlyWeb.FeedbackAPIController do
       reference_metadata: is_nil(reviewer) or reviewer.account_member
     )
   end
+
+  defp list_scope(conn, %{"view" => "mine"}) do
+    if conn.assigns.reviewer, do: conn.assigns.reviewer.id, else: :none
+  end
+
+  defp list_scope(conn, _), do: scope(conn)
 
   defp scope(conn) do
     if conn.assigns.project.public_feedback && conn.assigns.reviewer &&

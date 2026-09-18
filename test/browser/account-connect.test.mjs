@@ -67,7 +67,7 @@ test('WebKit account connection keeps credentials out of URLs and revokes on hos
     await page.getByRole('button', {name: 'Commenting: off'}).click()
     await page.getByRole('button', {name: 'Add comment', exact: true}).click()
     await page.locator('h1').click()
-    await page.getByText('Commenting as Owner', {exact: true}).waitFor()
+    await page.locator('fluently-feedback').locator('.panel').getByText('Commenting as Owner', {exact: true}).waitFor()
     await page.getByLabel('What should change?').fill('Account feedback')
     await page.getByRole('button', {name: 'Post comment', exact: true}).click()
     await page.getByText('Comment posted.', {exact: true}).waitFor()

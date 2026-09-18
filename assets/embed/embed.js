@@ -1,3 +1,4 @@
+import {renderReviewerBadge} from './reviewer-identity.mjs'
 import {customerReference, hostIdentityKey} from './customer-reference.mjs'
 import {startConnection, consumeConnection} from './account-connect.mjs'
 import {capture, resolve, context, pageURL, visible, excluded} from './anchor.mjs'
@@ -61,6 +62,8 @@ async function startEmbed() {
       :host{all:initial;color-scheme:light}*{box-sizing:border-box}button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:wait}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #1689d5;outline-offset:3px}
       .bar,.panel,.hint,.pin{font:13px/1.5 system-ui,sans-serif;color:#273140;pointer-events:auto}.bar{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));right:max(16px,env(safe-area-inset-right));display:flex;flex-direction:row;align-items:center;gap:12px;max-width:calc(100vw - 32px);pointer-events:none}
       button{background:#f4f8fc;border:1px solid #ccd6e4;border-radius:6px;padding:8px 12px;color:#1c597c}.primary{background:#167dbd;color:white;border-color:#167dbd}.panel{position:fixed;right:16px;top:16px;bottom:88px;width:350px;max-width:calc(100vw - 32px);overflow:auto;padding:20px;background:white;border:1px solid #ccd6e4;border-radius:12px;box-shadow:0 10px 40px #14243a30}.panel h2{font-size:19px;margin:0 0 15px}.panel p{margin:10px 0;overflow-wrap:anywhere}.panel label{display:block;margin:12px 0}.panel input,.panel textarea,.panel select{display:block;width:100%;padding:10px;border:1px solid #bccbdb;border-radius:6px;margin-top:6px;background:white;color:#273140}.panel textarea{min-height:100px;resize:vertical}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row h2{flex:1;margin:0}.muted{font-size:11px;color:#657387}.error{color:#a3313e;font-size:12px}.thread{display:block;width:100%;text-align:left;margin-top:10px;overflow-wrap:anywhere}.message{padding:12px 0;border-bottom:1px solid #e5ebf1;white-space:pre-wrap;overflow-wrap:anywhere}.message strong{font-size:12px}.message time{display:block;font-size:10px;color:#657387}.pin{position:fixed;transform:translate(-50%,-50%);border:2px solid white;box-shadow:0 0 0 1px #167dbd;width:28px;height:28px;padding:0;background:#167dbd;color:white;border-radius:50% 50% 3px 50%;font-size:11px}.hint{position:fixed;top:16px;left:16px;padding:10px 14px;background:#243447;color:white;border-radius:8px;max-width:calc(100vw - 32px);pointer-events:none}.outline{position:fixed;border:2px solid #1689d5;background:#1689d510;pointer-events:none}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}[hidden]{display:none!important}
+      .controls select{padding:8px;border:1px solid #ccd6e4;border-radius:6px;background:#f4f8fc;color:#1c597c;font:13px/1.5 system-ui,sans-serif}
+      .reviewer-identity{display:flex;align-items:center;gap:8px;min-width:0;font:12px/1.4 system-ui,sans-serif;color:#657387}.reviewer-avatar{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:50%;background:#eef1f5;border:1px solid #d6dce3;font-weight:600;color:#657387}.reviewer-identity[data-account="true"] .reviewer-avatar{background:#e8f5ff;border-color:#b5daf2;color:#0f6398}.reviewer-name{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.panel .reviewer-name{max-width:none;white-space:normal;overflow-wrap:anywhere}.panel .reviewer-identity{margin:12px 0}
       .snapshot{display:block;max-width:100%;height:auto;margin:12px 0;border:1px solid #ccd6e4;border-radius:6px}
       .launcher{position:relative;z-index:1;display:grid;place-items:center;flex:none;width:56px;height:56px;padding:3px;border:1px solid #d6dce3;border-radius:50%;background:white;box-shadow:0 4px 18px #14243a30;pointer-events:auto;transition:box-shadow .15s,border-color .15s}.launcher svg{display:block;width:48px;height:48px;border-radius:50%;overflow:hidden;filter:grayscale(1);opacity:.7;transform:rotate(0deg);transition:transform .6s cubic-bezier(.22,.61,.36,1),filter .6s ease,opacity .6s ease}.launcher:hover svg{opacity:1}.launcher[aria-pressed="true"]{border-color:#2093df;box-shadow:0 0 0 3px #2093df26,0 4px 18px #14243a30}.launcher[aria-pressed="true"] svg{filter:grayscale(0);opacity:1}@media(prefers-reduced-motion:reduce){.launcher,.launcher svg,.controls{transition:none}}
     `
@@ -84,7 +87,7 @@ async function startEmbed() {
     const live = el('div', '', 'sr'); live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite')
     shadow.append(pins, outline, hint, bar, panel, live, menu)
     document.body.append(host)
-    let reviewIdentity = 'Guest', identityReady = false
+    let reviewIdentity = {name: 'Guest', kind: 'guest'}, identityReady = false, reviewView = 'all'
     let armed = false, threads = [], page = pageURL(), draft = null, selected = null, filter = 'open', frame = null, loading = false
     let panelMode = '', lastFocus = null, busy = false, countLabel = '', destroyed = false, selectedAnchor = null
     let commenting = false, menuSnapshot = null, menuFocus = null, logoRotation = 0
@@ -113,8 +116,27 @@ async function startEmbed() {
     const controls = el('div', '', 'controls'); controls.inert = true; controls.setAttribute('aria-hidden', 'true')
     const listButton = button('Threads', () => showList())
     const exit = button('Exit', endReview)
-    controls.append(addButton, listButton, exit)
-    if (!demo) controls.append(button('Continue with Fluently', connectAccount))
+    const reviewerBadge = el('div'); reviewerBadge.dataset.reviewIdentity = ''
+    renderReviewerBadge(reviewerBadge, reviewIdentity)
+    const connectButton = button('Continue with Fluently', connectAccount)
+    const reviewVisibility = el('select'); reviewVisibility.setAttribute('aria-label', 'Review visibility'); reviewVisibility.hidden = true
+    for (const [value, text] of [['all', 'All reviews'], ['mine', 'My reviews']]) {
+      const option = el('option', text); option.value = value; reviewVisibility.append(option)
+    }
+    reviewVisibility.addEventListener('change', () => {
+      reviewView = reviewVisibility.value; threads = []; closePanel(); setArmed(false); renderPins(); refresh(true)
+    })
+    controls.append(reviewerBadge, reviewVisibility, addButton, listButton, exit)
+    if (!demo) controls.append(connectButton)
+    function updateReviewIdentity(identity) {
+      const next = identity || {name: 'Guest', kind: 'guest'}
+      if (identityReady && panelMode === 'draft' && (next.name !== reviewIdentity.name || next.kind !== reviewIdentity.kind)) closePanel()
+      reviewIdentity = next
+      for (const badge of shadow.querySelectorAll('[data-review-identity]')) renderReviewerBadge(badge, reviewIdentity)
+      connectButton.hidden = reviewIdentity.kind === 'account'
+      reviewVisibility.hidden = reviewIdentity.kind !== 'account'
+      if (reviewVisibility.hidden) { reviewView = 'all'; reviewVisibility.value = 'all' }
+    }
     bar.append(controls, toggle)
     const saveDemo = el('a', 'Create account')
     if (demo) {
@@ -177,7 +199,7 @@ async function startEmbed() {
       if (destroyed || (!demo && currentHostKey() !== hostKey)) { endReview(); throw new Error('Review session ended.') }
       const result = response.status === 204 ? {} : await response.json()
       if (!response.ok) {
-        if (!demo && [401, 403, 404].includes(response.status) && token) { token = null; identityReady = false; threads = []; renderPins(); setCommenting(false); try { sessionStorage.removeItem(storageKey) } catch {} }
+        if (!demo && [401, 403, 404].includes(response.status) && token) { token = null; identityReady = false; updateReviewIdentity(null); threads = []; renderPins(); setCommenting(false); try { sessionStorage.removeItem(storageKey) } catch {} }
         const error = new Error(result.error?.message || 'Request failed'); error.status = response.status; throw error }
       return result
     }
@@ -231,7 +253,7 @@ async function startEmbed() {
         event.preventDefault()
         submit(form, async () => {
           const result = await api('/sessions', 'POST', {token: invitation, name: input.value.trim(), external_ref: reference.value})
-          saveToken(result.token); reviewIdentity = result.reviewer.name; invitation = null
+          saveToken(result.token); updateReviewIdentity(result.reviewer); invitation = null
           bar.hidden = false; closePanel(); await refresh(true)
         }, error)
       })
@@ -303,16 +325,16 @@ async function startEmbed() {
     async function refresh(report = false) {
       if ((!demo && !token) || loading || destroyed) return
       loading = true
-      const requestedPage = page
+      const requestedPage = page, requestedView = reviewView
       try {
         let offset = 0, result, all = []
         do {
-          result = await api(`/comments?page=${encodeURIComponent(requestedPage)}&offset=${offset}`)
-          if (result.identity) reviewIdentity = result.identity.name
+          result = await api(`/comments?page=${encodeURIComponent(requestedPage)}&offset=${offset}&view=${requestedView}`)
+          if (result.identity) updateReviewIdentity(result.identity)
           if (demo && result.registered) { saveDemo.textContent = 'My workspace'; saveDemo.href = '/app' }
           all.push(...result.data); offset = result.next_offset
         } while (offset != null && all.length < 1000)
-        if (requestedPage !== page || destroyed) return
+        if (requestedPage !== page || requestedView !== reviewView || destroyed) return
         identityReady = true; toggle.disabled = false
         const previous = selected && threads.find(t => t.id === selected)
         threads = all; renderPins()
@@ -325,9 +347,12 @@ async function startEmbed() {
         if (report) announce('Feedback loaded.')
       } catch (e) {
         if (destroyed) return
-        if (e.status === 401 || e.status === 403 || e.status === 404) { token = null; identityReady = false; threads = []; renderPins(); setCommenting(false); toggle.disabled = true; try { sessionStorage.removeItem(storageKey) } catch {} ; report = true }
+        if (e.status === 401 || e.status === 403 || e.status === 404) { token = null; identityReady = false; updateReviewIdentity(null); threads = []; renderPins(); setCommenting(false); toggle.disabled = true; try { sessionStorage.removeItem(storageKey) } catch {} ; report = true }
         if (report) { openPanel('Feedback unavailable', 'error'); if (!demo) panel.append(button('Continue with Fluently', connectAccount)); panel.append(el('p', e.message, 'error'), el('p', 'If the session expired or was revoked, reopen a current review link.')); }
-      } finally { loading = false }
+      } finally {
+        loading = false
+        if (!destroyed && (requestedView !== reviewView || requestedPage !== page)) refresh(true)
+      }
     }
     function showList(focus = true) {
       setArmed(false)
@@ -440,8 +465,8 @@ async function startEmbed() {
       setArmed(false); openPanel('New comment', 'draft'); draft = {anchor, context: snapshot.context, page: snapshot.page}
       selectedAnchor = anchor; restoreOutline()
       panel.append(el('p', `Attached to ${anchor.target.feedback_id || anchor.target.id || anchor.target.tag}`, 'muted'))
-      panel.append(el('p', `Commenting as ${reviewIdentity}`, 'muted'))
-      if (demo) panel.append(el('p', 'Share feedback with the Fluently team. Other visitors cannot see your comments. Guest access uses a browser cookie and is separate from a Fluently account.', 'muted'))
+      const identity = el('div'); identity.dataset.reviewIdentity = ''; renderReviewerBadge(identity, reviewIdentity); panel.append(identity)
+      if (demo && reviewIdentity.kind !== 'account') panel.append(el('p', 'Share feedback with the Fluently team. Other visitors cannot see your comments. Guest access uses a browser cookie and is separate from a Fluently account.', 'muted'))
       if (anchor.target.text) panel.append(el('p', `Target text included: “${anchor.target.text}”`, 'muted'))
       let image = null, capturing = false
       const snapshotBox = el('div'), preview = el('div'), snapshotError = errorBox()
@@ -599,7 +624,7 @@ async function startEmbed() {
       if (connectionCode) {
         try {
           const result = await api('/account-sessions', 'POST', {code: connectionCode, verifier: pending.verifier})
-          saveToken(result.token); reviewIdentity = result.reviewer.name; invitation = null
+          saveToken(result.token); updateReviewIdentity(result.reviewer); invitation = null
           bar.hidden = false; closePanel(); await refresh(true)
         } catch (error) { nameForm(error.message) }
       } else if (connectionResult === 'guest') {

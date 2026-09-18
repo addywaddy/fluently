@@ -89,6 +89,8 @@ defmodule FluentlyWeb.DemoTest do
     added = login |> next() |> post("/demo/comments", attrs()) |> json_response(201)
     assert hd(added["data"]["messages"])["author"]["name"] == "Guest"
     assert hd(added["data"]["messages"])["author"]["kind"] == "anonymous"
+    listed = login |> next() |> get("/demo/comments") |> json_response(200)
+    assert listed["identity"] == %{"kind" => "guest", "name" => "Guest"}
   end
 
   test "registered owner authors with account identity; nonmember stays unlinked", %{
@@ -104,6 +106,8 @@ defmodule FluentlyWeb.DemoTest do
     assert identity.project_id == p.id
     assert identity.kind == "account"
     assert Repo.aggregate(GuestReviewSession, :count) == 0
+    listed = conn |> next() |> get("/demo/comments") |> json_response(200)
+    assert listed["identity"] == %{"kind" => "account", "name" => owner.name}
   end
 
   test "granting and revoking membership never relinks earlier guest authorship", %{
