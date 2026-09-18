@@ -133,3 +133,12 @@ text. Query strings, fragments and URL credentials are excluded; text-capture op
 also disables these hints. Selector matches must agree with image identity; ambiguous
 fallback matches remain unpinned. Snapshot capture retains the exact selected DOM node
 only in memory and checks visibility/exclusions again; it is never sent with the anchor.
+
+## Browser origin preservation
+
+First-party SDK fetches use `mode: same-origin` and `referrerPolicy: strict-origin`.
+The former blocks cross-origin redirects; the latter preserves the browser Origin header
+while sending only the site's origin as Referer, never a page path or query. Combining
+same-origin mode with no-referrer sends Origin:null in WebKit, as reproduced by the
+browser regression test. Customer CORS requests retain no-referrer. The backend still
+rejects null/foreign origins and requires CSRF tokens for cookie-authenticated writes.

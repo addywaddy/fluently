@@ -69,3 +69,5 @@ npm-debug.log
 *.tfplan
 /terraform/plan.txt
 /terraform/crash*.log
+
+/node_modules/

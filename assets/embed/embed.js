@@ -133,7 +133,10 @@ if ((demo || project) && !document.querySelector('fluently-feedback')) {
     async function api(path, method = 'GET', data) {
       const base = demo ? `${service}/demo` : `${service}/api/projects/${encodeURIComponent(project)}`
       const response = await fetch(`${base}${path}`, {
-        method, mode: demo ? 'same-origin' : 'cors', credentials: demo ? 'same-origin' : 'omit', referrerPolicy: 'no-referrer',
+        method, mode: demo ? 'same-origin' : 'cors', credentials: demo ? 'same-origin' : 'omit',
+        // no-referrer makes non-CORS writes send Origin: null in WebKit.
+        // Send only the origin for first-party requests, never paths or queries.
+        referrerPolicy: demo ? 'strict-origin' : 'no-referrer',
         headers: {'Content-Type': 'application/json', ...(demo ? {'x-csrf-token': document.querySelector('meta[name="csrf-token"]')?.content || ''} : token ? {Authorization: `Bearer ${token}`} : {})},
         body: data ? JSON.stringify(data) : undefined,
         signal: AbortSignal.timeout(15000)

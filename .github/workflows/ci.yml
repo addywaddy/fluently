@@ -51,6 +51,14 @@ jobs:
         run: mix test
       - name: Test embed SDK
         run: node --test test/embed/*.test.mjs
+      - name: Install browser test dependencies
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps webkit
+      - name: Build embed and test in WebKit
+        run: |
+          mix assets.build
+          npm run test:browser
 
   build:
     name: Production Docker build

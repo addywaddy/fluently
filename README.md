@@ -23,6 +23,9 @@ Visitors can also register at `/signup` and sign in at `/login` with email and p
 Owner keys are bearer credentials: keep them in a password manager, not in the embed.
 
 Run `mix precommit` and `node --test test/embed/*.test.mjs` for checks.
+For the Safari-engine regression test: `npm ci --ignore-scripts`,
+`npx playwright install webkit`, `mix assets.build`, then `npm run test:browser`.
+This exercises actual widget submission in WebKit, including Origin, CSRF and cookies.
 GitHub Actions runs on pushes to `main`, pull requests targeting `main`, and manual dispatch.
 It checks formatting and compilation warnings, runs backend/SDK tests, and builds the
 production Docker image (including assets and the release). Pushes to `main` deploy through Kamal after both checks pass; deployment uses GitHub secrets.
