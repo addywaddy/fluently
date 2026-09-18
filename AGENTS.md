@@ -5,6 +5,12 @@ This is a web application written using the Phoenix web framework.
 - Use `mix precommit` alias when you are done with all changes and fix any pending issues
 - Use the already included and available `:req` (`Req`) library for HTTP requests, **avoid** `:httpoison`, `:tesla`, and `:httpc`. Req is included by default and is the preferred HTTP client for Phoenix apps
 
+### Playwright test preference
+
+- Do not run Playwright tests locally without the user's express permission. General requests to implement, test, continue, or deploy do not grant that permission.
+- GitHub Actions may run Playwright tests normally; do not skip CI or disable its Playwright checks because local permission has not been granted.
+- When the user refers to "browser tests" in this context, they mean Playwright tests. Backend and SDK unit tests may run normally.
+
 ### Phoenix v1.8 guidelines
 
 - **Always** begin your LiveView templates with `<Layouts.app flash={@flash} ...>` which wraps all inner content
