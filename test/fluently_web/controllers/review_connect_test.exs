@@ -1,6 +1,7 @@
 defmodule FluentlyWeb.ReviewConnectTest do
   use FluentlyWeb.ConnCase, async: false
   alias Fluently.{Accounts, AccountReviews, Feedback, ProjectAccess, Repo}
+  alias Fluently.Accounts.AccountMembership
   alias Fluently.Accounts.ReviewGrant
   import Fluently.FeedbackFixtures
 
@@ -219,6 +220,17 @@ defmodule FluentlyWeb.ReviewConnectTest do
     assert {:error, :unauthorized} = AccountReviews.issue(c.project, c.account, Feedback.secret())
     assert {:ok, _, _} = Accounts.login(c.account.email, "long enough password for tests")
     assert {:error, :unauthorized} = AccountReviews.issue(c.project, c.account, Feedback.secret())
+    assert {:error, :unauthorized} = Feedback.authorize(c.project, token)
+  end
+
+  test "removing the account membership revokes an existing review grant", c do
+    token = grant(c.project, c.account)
+
+    membership =
+      Repo.get_by!(AccountMembership, account_id: c.account.id, user_id: c.account.user_id)
+
+    Repo.delete!(membership)
+
     assert {:error, :unauthorized} = Feedback.authorize(c.project, token)
   end
 

@@ -3,7 +3,7 @@ defmodule Fluently.Accounts do
   import Ecto.Query
   import Ecto.Changeset
   alias Fluently.{Repo, Feedback}
-  alias Fluently.Accounts.Account
+  alias Fluently.Accounts.{Account, AccountMembership}
   alias Fluently.Feedback.{Workspace, Thread}
 
   def current(token) when is_binary(token) do
@@ -27,7 +27,9 @@ defmodule Fluently.Accounts do
           on_conflict: :nothing
         )
 
-        account |> change(user_id: account.id) |> Repo.update!()
+        account = account |> change(user_id: account.id) |> Repo.update!()
+        ensure_owner_membership(account)
+        account
       end)
 
     account
@@ -72,6 +74,8 @@ defmodule Fluently.Accounts do
           |> put_change(:session_expires_at, DateTime.add(DateTime.utc_now(), 30, :day))
           |> Repo.insert()
           |> unwrap!()
+
+        ensure_owner_membership(account)
 
         Repo.get!(Workspace, account.workspace_id)
         |> change(name: account.name <> "’s workspace")
@@ -159,4 +163,15 @@ defmodule Fluently.Accounts do
 
   defp unwrap!({:ok, value}), do: value
   defp unwrap!({:error, reason}), do: Repo.rollback(reason)
+
+  defp ensure_owner_membership(%Account{id: account_id, user_id: user_id})
+       when is_binary(user_id) do
+    Repo.insert!(
+      %AccountMembership{account_id: account_id, user_id: user_id, role: "owner"},
+      on_conflict: :nothing,
+      conflict_target: [:account_id, :user_id]
+    )
+  end
+
+  defp ensure_owner_membership(_), do: :ok
 end

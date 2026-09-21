@@ -19,7 +19,7 @@ defmodule Fluently.AccountReviews do
   def return_url?(_, _), do: false
 
   def member?(%Account{email: email} = account, project) when not is_nil(email),
-    do: not is_nil(ProjectAccess.project(%{id: account.workspace_id}, project.id))
+    do: ProjectAccess.authorized?(account, project)
 
   def member?(_, _), do: false
 
