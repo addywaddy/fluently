@@ -5,7 +5,7 @@ import vm from 'node:vm'
 
 const code = await readFile(new URL('../../extension/dist/content.js', import.meta.url), 'utf8')
 const project = '0ffa2549-1dfd-4d5c-8e0a-52c2357f4de5'
-function harness({installed = false, running = false} = {}) {
+function harness({installed = false, running = false, apiName = 'chrome'} = {}) {
   let listener, pressed = false, clicks = 0
   const sent = [], stored = {}, events = {}
   const button = {disabled:false, getAttribute: () => String(pressed), click: () => { pressed = true; clicks++ }}
@@ -17,7 +17,7 @@ function harness({installed = false, running = false} = {}) {
     document:{documentElement:{}, querySelectorAll: () => scripts, querySelector: selector => selector === 'fluently-feedback' && running ? host : null},
     window:{addEventListener: (name, callback) => events[name] = callback},
     MutationObserver: class { observe() {} },
-    chrome:{runtime:{id:'test-extension', onMessage:{addListener: fn => listener = fn}, sendMessage: async message => sent.push(message)},
+    [apiName]:{runtime:{id:'test-extension', onMessage:{addListener: fn => listener = fn}, sendMessage: async message => sent.push(message)},
       storage:{local:{get: async () => ({}), set: async values => Object.assign(stored, values), remove: async key => delete stored[key]}}}
   })
   return {sent, stored, events, clicks: () => clicks, message: (message, id = 'test-extension') => new Promise(resolve => {
@@ -53,6 +53,16 @@ test('invalid configurations fail without activation and other extension message
   const page = harness()
   assert.match((await page.message({type:'start', config:{service:'http://evil.test', project}})).error, /valid/)
   assert.equal(await page.message({type:'status'}, 'other-extension'), undefined)
+  assert.deepEqual(page.stored, {})
+})
+
+test('Firefox/Safari browser namespace supports detection, activation and cleanup without chrome', async () => {
+  const page = harness({apiName:'browser', installed:true, running:true})
+  assert.equal(page.sent[0].installed, true)
+  assert.equal((await page.message({type:'status'})).configs[0].project, project)
+  assert.equal((await page.message({type:'start', config:{service:'https://fluently.now', project}})).ok, true)
+  assert.equal(page.clicks(), 1)
+  await page.events['fluently:exit']()
   assert.deepEqual(page.stored, {})
 })
 

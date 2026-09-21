@@ -95,5 +95,5 @@ config :esbuild, :embed,
 
 config :esbuild, :extension,
   args:
-    ~w(extension/content.js --bundle --target=chrome120 --minify --outfile=extension/dist/content.js),
+    ~w(extension/content.js --bundle --target=chrome120,firefox128,safari17 --minify --outfile=extension/dist/content.js),
   cd: Path.expand("..", __DIR__)

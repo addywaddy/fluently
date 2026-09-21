@@ -51,7 +51,7 @@ jobs:
         run: mix test
       - name: Test embed SDK
         run: node --test test/embed/*.test.mjs
-      - name: Build and test Chrome extension
+      - name: Build and test browser extension packages
         run: |
           mix extension.build
           node --test test/extension/*.test.mjs

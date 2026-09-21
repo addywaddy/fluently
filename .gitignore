@@ -72,3 +72,5 @@ npm-debug.log
 
 /node_modules/
 /extension/dist/
+/extension/builds/
+/extension/safari/

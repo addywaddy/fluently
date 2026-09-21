@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Fluently",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Start contextual reviews on your team's websites with Fluently.",
   "permissions": ["storage", "activeTab"],
   "background": {"service_worker": "background.js", "type": "module"},

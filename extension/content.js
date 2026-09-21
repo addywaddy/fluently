@@ -1,5 +1,6 @@
 import {startEmbed} from '../assets/embed/widget.js'
 import {configuration, detect} from './config.mjs'
+const extensionAPI = globalThis.browser || globalThis.chrome
 
 const key = `fluently-extension:${location.origin}`
 let starting = false
@@ -16,7 +17,7 @@ async function report() {
   const signature = JSON.stringify(status)
   if (signature === previous) return
   previous = signature
-  try { await chrome.runtime.sendMessage({type: 'detected', installed: status.installed}) } catch { /* extension reloaded */ }
+  try { await extensionAPI.runtime.sendMessage({type: 'detected', installed: status.installed}) } catch { /* extension reloaded */ }
 }
 
 async function launch(config, explicit) {
@@ -39,21 +40,21 @@ async function launch(config, explicit) {
   } finally { starting = false; report() }
 }
 
-chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (sender.id !== chrome.runtime.id) return
+extensionAPI.runtime.onMessage.addListener((message, sender, respond) => {
+  if (sender.id !== extensionAPI.runtime.id) return
   if (message.type === 'status') { respond(state()); return }
   if (message.type !== 'start') return
   const config = configuration(message.config?.service, message.config?.project, message.config?.attributes)
   if (!config && !document.querySelector('fluently-feedback')) { respond({error: 'Choose a valid Fluently service origin and project ID.'}); return }
   ;(async () => {
-    if (config) await chrome.storage.local.set({[key]: config})
+    if (config) await extensionAPI.storage.local.set({[key]: config})
     await launch(config, true)
     respond({ok: true})
   })().catch(() => respond({error: 'Unable to start Fluently. Reload the page and try again.'}))
   return true
 })
 
-window.addEventListener('fluently:exit', () => chrome.storage.local.remove(key))
+window.addEventListener('fluently:exit', () => extensionAPI.storage.local.remove(key))
 let queued = false
 new MutationObserver(() => {
   if (queued) return
@@ -63,7 +64,7 @@ new MutationObserver(() => {
 report()
 
 // Only previously activated sites resume. No background requests to Fluently on other sites.
-chrome.storage.local.get(key).then(async saved => {
+extensionAPI.storage.local.get(key).then(async saved => {
   const value = saved[key]
   const config = value && configuration(value.service, value.project, value.attributes)
   if (!config) return

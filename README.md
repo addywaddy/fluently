@@ -34,10 +34,12 @@ Run `mix assets.build` after editing `assets/embed/`; the normal development wat
 
 ## Create a project and install
 
-Chrome reviewers can also use the [Fluently extension](extension/README.md): its toolbar
+Chrome, Edge, Firefox and macOS Safari reviewers can also use the [Fluently extension](extension/README.md): its toolbar
 icon turns blue when Fluently is detected, and **Start Fluently** launches the review flow
 without a special URL. Build it with `mix extension.build` and load `extension/dist` as an
-unpacked extension. It can run the bundled widget on a configured project site without a snippet.
+unpacked Chrome extension. Other packages are in `extension/builds`; `mix extension.safari`
+creates the Safari Xcode wrapper. See the extension guide for temporary Firefox installation
+and Safari signing. It can run the bundled widget on a configured project site without a snippet.
 
 1. Create a project in `/app`, supplying its exact origin (e.g. `https://staging.example.com`, no trailing slash). HTTP is permitted for localhost testing only.
 2. Copy the snippet onto that website:

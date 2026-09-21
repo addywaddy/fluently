@@ -82,7 +82,12 @@ defmodule Fluently.MixProject do
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["esbuild.install --if-missing"],
       "assets.build": ["compile", "esbuild fluently", "esbuild embed"],
-      "extension.build": ["cmd node scripts/prepare-extension.mjs", "esbuild extension"],
+      "extension.build": [
+        "cmd node scripts/prepare-extension.mjs",
+        "esbuild extension",
+        "cmd node scripts/package-extensions.mjs"
+      ],
+      "extension.safari": ["extension.build", "cmd node scripts/package-safari.mjs"],
       "assets.deploy": [
         "compile",
         "esbuild fluently --minify",
