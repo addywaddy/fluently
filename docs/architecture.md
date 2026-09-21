@@ -232,3 +232,26 @@ sessions. Guest readers never receive it. References are bounded ASCII identifie
 from request logs, and carry the owning project UUID in API responses. The value itself is
 customer-generated HMAC metadata, not a signature Fluently can verify. Signed assertions
 would require a separate trust/key-management design and remain a future extension.
+## Organizational account foundation (2026-09-21)
+
+Fluently is moving toward the organizational model used by the Rails
+Feedstream prototype. `User` will be the global person and authentication
+identity; an organizational `Account` will own projects; `AccountMembership`
+will carry `owner`, `admin`, or `member` roles; and `ProjectMembership` will
+grant ordinary members access to selected projects. Owners and admins can see
+all projects in their account, while ordinary members (including invited
+clients) need an explicit project assignment. Authorship remains attached to a
+User even after access is revoked.
+
+The first transition migration adds `account_memberships` and
+`project_memberships`, backfilling registered owners and existing account
+project administrators. The current credential-bearing `Accounts.Account`,
+`Workspace`, `ProjectAdmin`, and `ProjectUser` schemas remain temporarily so
+the deployed application can migrate in stages. Later identity work will move
+credentials into `User` and remove the guest/demo compatibility paths.
+
+The Feedstream default-scope approach is not being copied. Fluently will keep
+explicit Ecto account/project queries and enforce parent-tenant consistency on
+writes. Cross-domain `ReviewGrant` sessions remain the security boundary and
+must re-check the live login session, effective membership, origin and project
+credential version on every request.

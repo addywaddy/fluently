@@ -15,6 +15,7 @@ defmodule Fluently.Accounts.Account do
     field :session_hash, :binary, redact: true
     field :session_expires_at, :utc_datetime_usec
     field :expires_at, :utc_datetime_usec
+    has_many :memberships, Fluently.Accounts.AccountMembership
     timestamps(type: :utc_datetime_usec)
   end
 end
