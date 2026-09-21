@@ -4,6 +4,7 @@ defmodule Fluently.Accounts.ReviewGrant do
   schema "account_review_grants" do
     field :project_id, Ecto.UUID
     field :account_id, Ecto.UUID
+    field :account_session_id, Ecto.UUID
     field :membership_id, Ecto.UUID
     field :account_session_hash, :binary, redact: true
     field :credential_version, :integer

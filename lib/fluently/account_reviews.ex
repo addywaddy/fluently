@@ -2,7 +2,7 @@ defmodule Fluently.AccountReviews do
   @moduledoc "Explicit project-member review sessions; independent of third-party cookies."
   import Ecto.Query
   alias Fluently.{Repo, Feedback, ProjectAccess}
-  alias Fluently.Accounts.{Account, ReviewGrant}
+  alias Fluently.Accounts.{Account, AccountSession, ReviewGrant}
   alias Fluently.Feedback.{ProjectAdmin, ProjectUser}
 
   def valid_nonce?(value), do: is_binary(value) and Regex.match?(~r/\A[A-Za-z0-9_-]{43}\z/, value)
@@ -28,8 +28,13 @@ defmodule Fluently.AccountReviews do
       expected_session = account && account.session_hash
       account = account && Repo.get(Account, account.id)
 
+      session =
+        account && account.session_hash &&
+          Repo.get_by(AccountSession, account_id: account.id, token_hash: account.session_hash)
+
       unless member?(account, project) and valid_nonce?(challenge) and live_account?(account) and
-               account.session_hash == expected_session,
+               account.session_hash == expected_session and not is_nil(session) and
+               DateTime.compare(session.expires_at, DateTime.utc_now()) == :gt,
              do: Repo.rollback(:unauthorized)
 
       {:ok, _} = ProjectAccess.reviewer(%{id: account.workspace_id}, project)
@@ -42,6 +47,7 @@ defmodule Fluently.AccountReviews do
       Repo.insert!(%ReviewGrant{
         project_id: project.id,
         account_id: account.id,
+        account_session_id: session.id,
         membership_id: membership.id,
         account_session_hash: account.session_hash,
         credential_version: project.credential_version,
@@ -114,7 +120,7 @@ defmodule Fluently.AccountReviews do
     with true <- DateTime.compare(grant.expires_at, DateTime.utc_now()) == :gt,
          true <- grant.credential_version == project.credential_version,
          %Account{} = account <- Repo.get(Account, grant.account_id),
-         true <- live_account?(account) and account.session_hash == grant.account_session_hash,
+         true <- live_session?(grant, account),
          true <- member?(account, project),
          %ProjectAdmin{} = member <- Repo.get(ProjectAdmin, grant.membership_id),
          true <- member.project_id == project.id and member.workspace_id == account.workspace_id,
@@ -131,4 +137,19 @@ defmodule Fluently.AccountReviews do
        do: DateTime.compare(expires, DateTime.utc_now()) == :gt
 
   defp live_account?(_), do: false
+
+  defp live_session?(%ReviewGrant{account_session_id: session_id}, %Account{} = account)
+       when is_binary(session_id) do
+    case Repo.get(AccountSession, session_id) do
+      %AccountSession{account_id: account_id, user_id: user_id, expires_at: expires_at}
+      when account_id == account.id and user_id == account.user_id ->
+        DateTime.compare(expires_at, DateTime.utc_now()) == :gt
+
+      _ ->
+        false
+    end
+  end
+
+  defp live_session?(%ReviewGrant{account_session_id: nil, account_session_hash: hash}, account),
+    do: live_account?(account) and account.session_hash == hash
 end
