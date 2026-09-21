@@ -60,19 +60,52 @@ defmodule Fluently.Feedback do
         api_hash: hash(credentials.api),
         review_expires_at: DateTime.add(DateTime.utc_now(), 14, :day)
       }
-      |> cast(attrs, [:name, :origin])
-      |> validate_required([:name, :origin])
-      |> validate_length(:name, max: 100)
-      |> validate_change(:origin, fn :origin, value ->
-        if valid_origin?(value),
-          do: [],
-          else: [origin: "must be an HTTPS origin without a path (HTTP allowed on localhost)"]
-      end)
+      |> change_project(attrs)
 
     case Repo.insert(changeset) do
       {:ok, p} -> {:ok, p, credentials}
       error -> error
     end
+  end
+
+  def change_project(%Project{} = project, attrs \\ %{}) do
+    project
+    |> cast(attrs, [:name, :origin])
+    |> validate_required([:name, :origin])
+    |> validate_length(:name, max: 100)
+    |> validate_change(:origin, fn :origin, value ->
+      if valid_origin?(value),
+        do: [],
+        else: [origin: "must be an HTTPS origin without a path (HTTP allowed on localhost)"]
+    end)
+  end
+
+  def update_project(%Workspace{} = workspace, id, attrs) do
+    Repo.transaction(fn ->
+      project = project(workspace, id) || Repo.rollback(:not_found)
+      changeset = change_project(project, attrs)
+
+      credentials =
+        if changeset.valid? and changed?(changeset, :origin),
+          do: %{review: secret(), api: secret()}
+
+      changeset =
+        if credentials do
+          change(changeset,
+            review_hash: hash(credentials.review),
+            api_hash: hash(credentials.api),
+            review_expires_at: DateTime.add(DateTime.utc_now(), 14, :day),
+            credential_version: project.credential_version + 1
+          )
+        else
+          changeset
+        end
+
+      case Repo.update(changeset) do
+        {:ok, project} -> {project, credentials}
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
   end
 
   def rotate_project(%Workspace{} = workspace, id) do

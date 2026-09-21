@@ -1,0 +1,28 @@
+<main class="manage">
+  <a href={~p"/app/projects/#{@project.id}"}>← Project</a>
+  <h1>Edit project</h1>
+  <p>
+    Changing the website origin issues a new review link and API key and ends existing review sessions. Existing comments keep their original page URLs.
+  </p>
+  <.form for={@form} action={~p"/app/projects/#{@project.id}"} method="patch" id="edit-project">
+    <.input
+      field={@form[:name]}
+      label="Project name"
+      required
+      maxlength="100"
+      class="manage-input"
+    />
+    <.input
+      field={@form[:origin]}
+      label="Website origin"
+      placeholder="https://staging.example.com"
+      required
+      class="manage-input"
+    />
+    <p>
+      Use an exact HTTPS origin without a path or trailing slash. HTTP is allowed for localhost.
+    </p>
+    <button id="save-project" class="button button-primary">Save changes</button>
+    <a id="cancel-project-edit" href={~p"/app/projects/#{@project.id}"}>Cancel</a>
+  </.form>
+</main>

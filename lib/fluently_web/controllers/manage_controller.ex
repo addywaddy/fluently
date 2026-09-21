@@ -96,6 +96,43 @@ defmodule FluentlyWeb.ManageController do
     end
   end
 
+  def edit(conn, %{"id" => id}) do
+    case Feedback.project(conn.assigns.workspace, id) do
+      nil ->
+        send_resp(conn, 404, "Not found")
+
+      project ->
+        render(conn, :edit, project: project, form: to_form(Feedback.change_project(project)))
+    end
+  end
+
+  def update(conn, %{"id" => id, "project" => attrs}) when is_map(attrs) do
+    case Feedback.update_project(conn.assigns.workspace, id, attrs) do
+      {:ok, {project, nil}} ->
+        conn
+        |> put_flash(:info, "Project updated.")
+        |> redirect(to: ~p"/app/projects/#{project.id}")
+
+      {:ok, {project, credentials}} ->
+        conn
+        |> put_flash(
+          :info,
+          "Project updated. Save the new credentials below; previous credentials and review sessions no longer work."
+        )
+        |> redirect_with_credentials(project, credentials)
+
+      {:error, :not_found} ->
+        send_resp(conn, 404, "Not found")
+
+      {:error, changeset} ->
+        conn
+        |> put_status(422)
+        |> render(:edit, project: changeset.data, form: to_form(changeset))
+    end
+  end
+
+  def update(conn, _), do: send_resp(conn, 400, "Enter project details.")
+
   def delete(conn, %{"id" => id, "confirm" => "delete"}) do
     case Feedback.delete_project(conn.assigns.workspace, id) do
       {:ok, _} -> redirect(conn, to: ~p"/app")

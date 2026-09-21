@@ -1,6 +1,12 @@
 <main class="manage">
   <a href={~p"/app"}>← Projects</a>
   <h1>{@project.name}</h1><p>{@project.origin}</p>
+  <p :if={Phoenix.Flash.get(@flash, :info)} id="project-notice" role="status">
+    {Phoenix.Flash.get(@flash, :info)}
+  </p>
+  <p :if={@owner}>
+    <a id="edit-project-link" href={~p"/app/projects/#{@project.id}/edit"}>Edit project</a>
+  </p>
   <p>
     <a href={@project.origin <> "/#fluently_account=1"} rel="noreferrer" target="_blank">Review on website with Fluently ↗</a>
   </p>

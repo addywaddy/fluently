@@ -55,6 +55,13 @@ On customer websites, no invitation/session means no widget or feedback requests
 
 ## Review with a Fluently account
 
+Project owners can choose **Edit project** from the project page to change its name or
+website origin. A name-only change preserves credentials. Changing the origin issues a
+new review link and read-only API key and invalidates existing review sessions; save the
+new credentials shown after saving. The project ID and embed snippet remain unchanged.
+Existing feedback keeps its original page URLs. Invited project admins cannot edit these
+owner-only settings.
+
 Project owners and explicitly added admins can use **Review on website with Fluently**
 in the project dashboard, or **Continue with Fluently** in the widget. This opens Fluently
 in the same tab, asks for login if needed, and asks you to confirm your identity before
