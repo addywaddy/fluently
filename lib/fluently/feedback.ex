@@ -166,7 +166,8 @@ defmodule Fluently.Feedback do
 
   def start_review(p, key, name, external_ref)
       when is_nil(external_ref) or is_binary(external_ref) do
-    if valid_secret?(key, p.review_hash) and
+    if not Application.get_env(:fluently, :private_feedback_only, false) and
+         valid_secret?(key, p.review_hash) and
          DateTime.compare(p.review_expires_at, DateTime.utc_now()) == :gt do
       if valid_external_ref?(external_ref) do
         create_project_user(p, %{
@@ -202,8 +203,13 @@ defmodule Fluently.Feedback do
 
   def authorize(p, token) do
     case Fluently.AccountReviews.authorize(p, token) do
-      {:ok, identity} -> {:ok, identity}
-      _ -> authorize_guest(p, token)
+      {:ok, identity} ->
+        {:ok, identity}
+
+      _ ->
+        if Application.get_env(:fluently, :private_feedback_only, false),
+          do: {:error, :unauthorized},
+          else: authorize_guest(p, token)
     end
   end
 
