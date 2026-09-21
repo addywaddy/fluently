@@ -276,6 +276,12 @@ account-authored feedback dual-writes the direct user fields. The legacy
 reviewer columns remain readable until guest data is purged and serializers and
 ownership checks have moved fully to User.
 
+Migration `20260921203311` purges existing guest, anonymous and pseudonymous
+threads, sessions, reviewer identities and anonymous account rows. Registered
+feedback, registered users and project configuration are retained. The legacy
+tables remain for one compatibility release but production request boundaries
+reject new guest writes.
+
 The Feedstream default-scope approach is not being copied. Fluently will keep
 explicit Ecto account/project queries and enforce parent-tenant consistency on
 writes. Cross-domain `ReviewGrant` sessions remain the security boundary and
