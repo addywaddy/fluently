@@ -1,4 +1,4 @@
-defmodule Fluently.Feedback.Snapshot do
+defmodule Fluently.Reviews.Snapshot do
   use Ecto.Schema
   @primary_key {:thread_id, :binary_id, autogenerate: false}
   schema "feedback_snapshots" do

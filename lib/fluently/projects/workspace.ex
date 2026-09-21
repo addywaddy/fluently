@@ -1,4 +1,4 @@
-defmodule Fluently.Feedback.Workspace do
+defmodule Fluently.Projects.Workspace do
   use Ecto.Schema
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "workspaces" do

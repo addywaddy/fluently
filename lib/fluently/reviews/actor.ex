@@ -1,4 +1,4 @@
-defmodule Fluently.Feedback.Actor do
+defmodule Fluently.Reviews.Actor do
   @moduledoc "A registered user authorized to act on a project."
 
   @enforce_keys [:project_id, :user_id, :name]

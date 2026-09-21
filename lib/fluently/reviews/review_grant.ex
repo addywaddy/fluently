@@ -1,4 +1,4 @@
-defmodule Fluently.Accounts.ReviewGrant do
+defmodule Fluently.Reviews.ReviewGrant do
   use Ecto.Schema
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "account_review_grants" do

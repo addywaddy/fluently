@@ -2,7 +2,7 @@ defmodule FluentlyWeb.ReviewConnectTest do
   use FluentlyWeb.ConnCase, async: false
   alias Fluently.{Accounts, AccountReviews, Feedback, ProjectAccess, Repo}
   alias Fluently.Accounts.AccountMembership
-  alias Fluently.Accounts.ReviewGrant
+  alias Fluently.Reviews.ReviewGrant
   import Fluently.FeedbackFixtures
 
   setup do
@@ -93,8 +93,8 @@ defmodule FluentlyWeb.ReviewConnectTest do
 
     author = hd(created["data"]["messages"])["author"]
     assert author["name"] == "Owner"
-    assert Repo.get!(Fluently.Feedback.ProjectUser, author["id"]).user_id == c.account.user_id
-    thread = Repo.get!(Fluently.Feedback.Thread, created["data"]["id"]) |> Repo.preload(:messages)
+    assert Repo.get!(Fluently.Projects.ProjectUser, author["id"]).user_id == c.account.user_id
+    thread = Repo.get!(Fluently.Reviews.Thread, created["data"]["id"]) |> Repo.preload(:messages)
     assert thread.author_user_id == c.account.user_id
     assert hd(thread.messages).author_user_id == c.account.user_id
 
@@ -172,7 +172,7 @@ defmodule FluentlyWeb.ReviewConnectTest do
       })
 
     {params, _} = pending(c.project)
-    before_count = Repo.aggregate(Fluently.Feedback.ProjectUser, :count)
+    before_count = Repo.aggregate(Fluently.Projects.ProjectUser, :count)
 
     start =
       build_conn() |> init_test_session(account_token: token) |> get("/review/connect", params)
@@ -187,7 +187,7 @@ defmodule FluentlyWeb.ReviewConnectTest do
     refute redirected_to(returned) =~ outsider.name
     refute redirected_to(returned) =~ outsider.email
     refute redirected_to(returned) =~ outsider.id
-    assert Repo.aggregate(Fluently.Feedback.ProjectUser, :count) == before_count
+    assert Repo.aggregate(Fluently.Projects.ProjectUser, :count) == before_count
     {:ok, guest_token, guest} = Feedback.start_review(c.project, c.keys.review, "Guest")
     {:ok, membership} = ProjectAccess.grant(c.workspace, c.project.id, outsider.email)
     account_token = grant(c.project, outsider)

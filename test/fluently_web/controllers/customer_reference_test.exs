@@ -1,7 +1,7 @@
 defmodule FluentlyWeb.CustomerReferenceTest do
   use FluentlyWeb.ConnCase, async: false
   alias Fluently.{Feedback, Repo}
-  alias Fluently.Feedback.ProjectUser
+  alias Fluently.Projects.ProjectUser
   import Fluently.FeedbackFixtures
 
   setup do

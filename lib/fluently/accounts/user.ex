@@ -7,7 +7,7 @@ defmodule Fluently.Accounts.User do
     field :name, :string
     field :email, :string
     has_many :account_memberships, Fluently.Accounts.AccountMembership
-    has_many :project_memberships, Fluently.Feedback.ProjectMembership
+    has_many :project_memberships, Fluently.Projects.ProjectMembership
     timestamps(type: :utc_datetime_usec)
   end
 end

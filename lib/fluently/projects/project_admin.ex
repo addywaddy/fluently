@@ -1,4 +1,4 @@
-defmodule Fluently.Feedback.ProjectAdmin do
+defmodule Fluently.Projects.ProjectAdmin do
   use Ecto.Schema
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "project_admins" do

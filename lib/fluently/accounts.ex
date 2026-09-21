@@ -4,7 +4,8 @@ defmodule Fluently.Accounts do
   import Ecto.Changeset
   alias Fluently.{Repo, Feedback}
   alias Fluently.Accounts.{Account, AccountMembership, AccountSession}
-  alias Fluently.Feedback.{Workspace, Thread}
+  alias Fluently.Projects.Workspace
+  alias Fluently.Reviews.Thread
 
   def current(token) when is_binary(token) do
     now = DateTime.utc_now()

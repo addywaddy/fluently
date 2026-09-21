@@ -1,4 +1,4 @@
-defmodule Fluently.Feedback.ProjectMembership do
+defmodule Fluently.Projects.ProjectMembership do
   @moduledoc "Explicit project access for ordinary account members."
   use Ecto.Schema
   import Ecto.Changeset

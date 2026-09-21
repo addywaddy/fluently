@@ -1,4 +1,4 @@
-defmodule Fluently.Feedback.GuestReviewSession do
+defmodule Fluently.Reviews.GuestReviewSession do
   use Ecto.Schema
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "guest_review_sessions" do

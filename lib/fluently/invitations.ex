@@ -5,7 +5,7 @@ defmodule Fluently.Invitations do
   import Ecto.Changeset, only: [change: 2]
   alias Fluently.{Feedback, Repo}
   alias Fluently.Accounts.{Account, AccountMembership, Invitation}
-  alias Fluently.Feedback.{Project, ProjectAdmin, ProjectMembership}
+  alias Fluently.Projects.{Project, ProjectAdmin, ProjectMembership}
 
   @expiry_days 7
 

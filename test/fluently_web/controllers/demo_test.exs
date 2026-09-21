@@ -2,7 +2,8 @@ defmodule FluentlyWeb.DemoTest do
   use FluentlyWeb.ConnCase, async: false
   alias Fluently.{Accounts, Feedback, GuestReviews, Repo, Threads}
   alias Fluently.Accounts.{Account, User}
-  alias Fluently.Feedback.{GuestReviewSession, Workspace}
+  alias Fluently.Projects.Workspace
+  alias Fluently.Reviews.GuestReviewSession
   import Fluently.FeedbackFixtures
 
   setup do
@@ -101,7 +102,7 @@ defmodule FluentlyWeb.DemoTest do
     owner = Repo.update!(Ecto.Changeset.change(owner, workspace_id: w.id))
     conn = visitor() |> init_test_session(account_token: token) |> post("/demo/comments", attrs())
     thread = json_response(conn, 201)["data"]
-    identity = Repo.get!(Fluently.Feedback.ProjectUser, hd(thread["messages"])["author"]["id"])
+    identity = Repo.get!(Fluently.Projects.ProjectUser, hd(thread["messages"])["author"]["id"])
     assert identity.user_id == owner.user_id
     assert identity.project_id == p.id
     assert identity.kind == "account"
@@ -122,9 +123,9 @@ defmodule FluentlyWeb.DemoTest do
     {:ok, membership} = Fluently.ProjectAccess.grant(w, p.id, account.email)
     member = signed |> next() |> post("/demo/comments", attrs())
     member_author = hd(json_response(member, 201)["data"]["messages"])["author"]["id"]
-    assert Repo.get!(Fluently.Feedback.ProjectUser, member_author).user_id == account.user_id
+    assert Repo.get!(Fluently.Projects.ProjectUser, member_author).user_id == account.user_id
     assert Threads.get(p, thread_id).reviewer_id == guest.id
-    assert Repo.get!(Fluently.Feedback.ProjectUser, guest.id).user_id == guest.user_id
+    assert Repo.get!(Fluently.Projects.ProjectUser, guest.id).user_id == guest.user_id
     refute guest.user_id == account.user_id
     assert :ok = Fluently.ProjectAccess.revoke(w, p.id, membership.id)
     visible = member |> next() |> get("/demo/comments") |> json_response(200)
@@ -151,7 +152,7 @@ defmodule FluentlyWeb.DemoTest do
     signed = conn |> next() |> post("/signup", signup_attrs())
     assert redirected_to(signed) == "/app"
     refute Accounts.current(get_session(signed, :account_token)).user_id == identity.user_id
-    assert Repo.get!(Fluently.Feedback.ProjectUser, identity.id).name == "Legacy guest"
+    assert Repo.get!(Fluently.Projects.ProjectUser, identity.id).name == "Legacy guest"
   end
 
   test "rolling-release anonymous cookies migrate, but registered login cannot recover guest identity",
@@ -159,7 +160,7 @@ defmodule FluentlyWeb.DemoTest do
     {:ok, w, _} = Feedback.create_workspace("Legacy")
 
     identity =
-      Repo.insert!(%Fluently.Feedback.ProjectUser{
+      Repo.insert!(%Fluently.Projects.ProjectUser{
         project_id: p.id,
         name: "Old guest",
         kind: "anonymous"
@@ -177,7 +178,7 @@ defmodule FluentlyWeb.DemoTest do
       })
 
     assert GuestReviews.current(p, old).id == identity.id
-    assert Repo.get!(Fluently.Feedback.ProjectUser, identity.id).user_id == identity.id
+    assert Repo.get!(Fluently.Projects.ProjectUser, identity.id).user_id == identity.id
     assert Repo.get!(User, identity.id).kind == "guest"
     assert Repo.aggregate(GuestReviewSession, :count) == 1
 

@@ -1,7 +1,7 @@
 defmodule FluentlyWeb.ProjectEditTest do
   use FluentlyWeb.ConnCase, async: false
   alias Fluently.{Feedback, Repo}
-  alias Fluently.Feedback.ProjectAdmin
+  alias Fluently.Projects.ProjectAdmin
 
   test "origin changes revoke account review grants while name changes preserve them" do
     {:ok, {account, _}} =
@@ -118,7 +118,7 @@ defmodule FluentlyWeb.ProjectEditTest do
              Feedback.start_review(updated, ctx.credentials.review, "Reviewer")
 
     assert {:error, :unauthorized} = Feedback.authorize(updated, token)
-    assert Repo.get!(Fluently.Feedback.Thread, thread.id).page == thread.page
+    assert Repo.get!(Fluently.Reviews.Thread, thread.id).page == thread.page
     conn = conn |> recycle() |> get(path)
     doc = conn |> html_response(200) |> LazyHTML.from_document()
     assert Enum.any?(LazyHTML.query(doc, ~s(a[href^="http://localhost:4100/#fluently="])))

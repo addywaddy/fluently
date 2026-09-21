@@ -1,7 +1,7 @@
-defmodule Fluently.Feedback.ProjectMembershipTest do
+defmodule Fluently.Projects.ProjectMembershipTest do
   use Fluently.DataCase, async: true
 
-  alias Fluently.Feedback.ProjectMembership
+  alias Fluently.Projects.ProjectMembership
 
   test "requires a project and user" do
     changeset = ProjectMembership.changeset(%ProjectMembership{}, %{})

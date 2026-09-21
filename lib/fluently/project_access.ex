@@ -2,7 +2,8 @@ defmodule Fluently.ProjectAccess do
   @moduledoc "Explicit project administration. Credentials and membership changes remain owner-only."
   import Ecto.Query
   alias Fluently.{Repo, Feedback}
-  alias Fluently.Feedback.{Actor, Project, ProjectAdmin, ProjectMembership, ProjectUser}
+  alias Fluently.Projects.{Project, ProjectAdmin, ProjectMembership, ProjectUser}
+  alias Fluently.Reviews.Actor
   alias Fluently.Accounts.{Account, AccountMembership}
 
   @doc """

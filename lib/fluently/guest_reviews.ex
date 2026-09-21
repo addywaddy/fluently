@@ -2,7 +2,8 @@ defmodule Fluently.GuestReviews do
   @moduledoc "Project-bound guest capabilities, independent of registered account sessions."
   import Ecto.Query
   alias Fluently.{Repo, Feedback, Threads}
-  alias Fluently.Feedback.{GuestReviewSession, ProjectUser}
+  alias Fluently.Projects.ProjectUser
+  alias Fluently.Reviews.GuestReviewSession
 
   def current(project, token) when not is_nil(project) and is_binary(token) do
     now = DateTime.utc_now()

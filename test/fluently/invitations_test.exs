@@ -3,7 +3,7 @@ defmodule Fluently.InvitationsTest do
 
   alias Fluently.{Accounts, Feedback, Invitations, Repo}
   alias Fluently.Accounts.{AccountMembership, Invitation}
-  alias Fluently.Feedback.{ProjectAdmin, ProjectMembership}
+  alias Fluently.Projects.{ProjectAdmin, ProjectMembership}
 
   setup do
     {:ok, {owner, _}} =

@@ -1,4 +1,4 @@
-defmodule Fluently.Feedback.ProjectUser do
+defmodule Fluently.Projects.ProjectUser do
   use Ecto.Schema
   @primary_key {:id, :binary_id, autogenerate: true}
   # Retain the physical table and foreign-key names for release compatibility.

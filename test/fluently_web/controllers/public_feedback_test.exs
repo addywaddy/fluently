@@ -193,7 +193,7 @@ defmodule FluentlyWeb.PublicFeedbackTest do
     assert is_nil(registered.feedback_reviewer_id)
 
     session =
-      Repo.get_by!(Fluently.Feedback.GuestReviewSession, token_hash: Feedback.hash(guest_token))
+      Repo.get_by!(Fluently.Reviews.GuestReviewSession, token_hash: Feedback.hash(guest_token))
 
     Repo.update!(
       Ecto.Changeset.change(session, expires_at: DateTime.add(DateTime.utc_now(), -1, :day))
@@ -201,7 +201,7 @@ defmodule FluentlyWeb.PublicFeedbackTest do
 
     assert is_nil(Fluently.GuestReviews.current(p, guest_token))
     assert length(Threads.list(p, %{})) == 1
-    assert Repo.get(Fluently.Feedback.ProjectUser, guest.id)
+    assert Repo.get(Fluently.Projects.ProjectUser, guest.id)
 
     assert first |> next() |> get("/demo/comments") |> json_response(200) |> Map.fetch!("data") ==
              []

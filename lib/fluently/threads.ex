@@ -3,7 +3,8 @@ defmodule Fluently.Threads do
   import Ecto.Query
   import Ecto.Changeset
   alias Fluently.Repo
-  alias Fluently.Feedback.{Actor, Thread, Message, Anchor, ProjectUser}
+  alias Fluently.Projects.ProjectUser
+  alias Fluently.Reviews.{Actor, Anchor, Message, Thread}
 
   # :all is an internal capability, never accepted from request parameters.
   def visible?(project, id, scope) do
@@ -255,7 +256,7 @@ defmodule Fluently.Threads do
 
     Repo.preload(value,
       snapshot:
-        from(s in Fluently.Feedback.Snapshot, select: [:thread_id, :width, :height, :inserted_at]),
+        from(s in Fluently.Reviews.Snapshot, select: [:thread_id, :width, :height, :inserted_at]),
       messages: message_preload
     )
   end

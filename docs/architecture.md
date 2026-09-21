@@ -283,7 +283,7 @@ tables remain for one compatibility release but production request boundaries
 reject new guest writes.
 
 The private runtime cutover resolves review actors from registered `User`
-records and account/project memberships through `Fluently.Feedback.Actor`.
+records and account/project memberships through `Fluently.Reviews.Actor`.
 New private threads and messages store direct `author_user_id` values. Migration
 `20260921205321` removes the guest session table on private deployments. SQLite
 cannot rewrite the original non-null reviewer columns during a rolling

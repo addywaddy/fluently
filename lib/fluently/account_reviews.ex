@@ -2,8 +2,9 @@ defmodule Fluently.AccountReviews do
   @moduledoc "Explicit project-member review sessions; independent of third-party cookies."
   import Ecto.Query
   alias Fluently.{Repo, Feedback, ProjectAccess, Accounts}
-  alias Fluently.Accounts.{Account, AccountSession, ReviewGrant}
-  alias Fluently.Feedback.{Actor, ProjectAdmin, ProjectUser}
+  alias Fluently.Accounts.{Account, AccountSession}
+  alias Fluently.Projects.{ProjectAdmin, ProjectUser}
+  alias Fluently.Reviews.{Actor, ReviewGrant}
 
   def valid_nonce?(value), do: is_binary(value) and Regex.match?(~r/\A[A-Za-z0-9_-]{43}\z/, value)
 

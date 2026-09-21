@@ -100,9 +100,9 @@ defmodule Fluently.FeedbackTest do
   test "project deletion erases all feedback and reviewers", ctx do
     {:ok, _} = Threads.create(ctx.project, ctx.reviewer, attrs())
     assert {:ok, _} = Feedback.delete_project(ctx.owner, ctx.project.id)
-    assert Repo.aggregate(Fluently.Feedback.Thread, :count) == 0
-    assert Repo.aggregate(Fluently.Feedback.Message, :count) == 0
-    assert Repo.aggregate(Fluently.Feedback.ProjectUser, :count) == 0
+    assert Repo.aggregate(Fluently.Reviews.Thread, :count) == 0
+    assert Repo.aggregate(Fluently.Reviews.Message, :count) == 0
+    assert Repo.aggregate(Fluently.Projects.ProjectUser, :count) == 0
   end
 
   test "malformed URLs fail validation without raising", ctx do
@@ -125,7 +125,7 @@ defmodule Fluently.FeedbackTest do
   test "image anchors round-trip only sanitized bounded resource URLs" do
     anchor = Fluently.FeedbackFixtures.attrs()["anchor"]
     image = put_in(anchor, ["target", "image_src"], "https://example.com/logo.svg")
-    assert {:ok, normalized} = Fluently.Feedback.Anchor.normalize(image)
+    assert {:ok, normalized} = Fluently.Reviews.Anchor.normalize(image)
     assert normalized["target"]["image_src"] == "https://example.com/logo.svg"
 
     for source <- [
@@ -135,7 +135,7 @@ defmodule Fluently.FeedbackTest do
           "https://user:password@example.com/logo.svg"
         ] do
       assert {:error, :invalid_anchor} =
-               Fluently.Feedback.Anchor.normalize(put_in(anchor, ["target", "image_src"], source))
+               Fluently.Reviews.Anchor.normalize(put_in(anchor, ["target", "image_src"], source))
     end
   end
 end

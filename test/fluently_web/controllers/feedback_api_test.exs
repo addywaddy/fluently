@@ -156,7 +156,7 @@ defmodule FluentlyWeb.FeedbackAPITest do
     assert result["deleted_thread"]
     assert is_nil(result["data"])
     assert api(ctx.token) |> get(ctx.path <> "/comments/#{thread["id"]}") |> json_response(404)
-    assert is_nil(Fluently.Repo.get(Fluently.Feedback.Message, remaining_reply["id"]))
+    assert is_nil(Fluently.Repo.get(Fluently.Reviews.Message, remaining_reply["id"]))
     assert api(ctx.token) |> delete(path) |> json_response(404)
   end
 
@@ -241,7 +241,7 @@ defmodule FluentlyWeb.FeedbackAPITest do
            |> json_response(200)
 
     assert api(ctx.token) |> get(path) |> json_response(404)
-    assert is_nil(Fluently.Repo.get(Fluently.Feedback.Snapshot, thread["id"]))
+    assert is_nil(Fluently.Repo.get(Fluently.Reviews.Snapshot, thread["id"]))
   end
 
   test "snapshot request bodies have a separate bounded limit", ctx do

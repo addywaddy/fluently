@@ -3,7 +3,7 @@ defmodule Fluently.Feedback do
   import Ecto.Query
   import Ecto.Changeset
   alias Fluently.Repo
-  alias Fluently.Feedback.{Workspace, Project, ProjectUser}
+  alias Fluently.Projects.{Project, ProjectUser, Workspace}
 
   def secret, do: :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
   def hash(value) when is_binary(value), do: :crypto.hash(:sha256, value)
@@ -137,7 +137,7 @@ defmodule Fluently.Feedback do
 
       p ->
         Repo.transaction(fn ->
-          Repo.delete_all(from t in Fluently.Feedback.Thread, where: t.project_id == ^p.id)
+          Repo.delete_all(from t in Fluently.Reviews.Thread, where: t.project_id == ^p.id)
           Repo.delete!(p)
         end)
     end

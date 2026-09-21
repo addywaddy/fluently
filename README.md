@@ -286,7 +286,7 @@ The landing widget uses `/demo/comments/:thread_id/snapshot` with its cookie/CSR
 `Fluently.Accounts` owns registered credentials, account sessions and legacy demo cleanup;
 `Fluently.GuestReviews` owns independent first-party guest capabilities;
 `Fluently.Feedback` owns workspace/project credentials and reviewer sessions;
-`Fluently.Threads` owns scoped conversations; `Fluently.Feedback.Anchor` validates context.
+`Fluently.Threads` owns scoped conversations; `Fluently.Reviews.Anchor` validates context.
 `assets/embed/anchor.mjs` handles DOM capture/resolution independently of widget UI.
 Production exceptions and process crashes are reported to Sentry with minimized request
 context; local development and tests do not send reports. Source context is packaged

@@ -1,4 +1,4 @@
-defmodule Fluently.Feedback.Anchor do
+defmodule Fluently.Reviews.Anchor do
   @moduledoc "Versioned platform envelope. Only explicit, bounded context fields cross the API boundary."
   def normalize(
         %{
