@@ -50,6 +50,7 @@ defmodule Fluently.Accounts do
   def ensure_user(account), do: account
 
   def demo_enabled?, do: Application.get_env(:fluently, :demo_enabled, true)
+  def private_feedback_only?, do: Application.get_env(:fluently, :private_feedback_only, false)
 
   def public_project do
     case Feedback.project(Application.get_env(:fluently, :feedback_project_id)) do

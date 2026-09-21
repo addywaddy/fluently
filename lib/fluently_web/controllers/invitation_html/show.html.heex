@@ -1,0 +1,21 @@
+<div class="auth-page" data-feedback-exclude>
+  <main class="auth-form-section" id="invitation-main">
+    <p class="auth-eyebrow">YOU’RE INVITED</p>
+    <h1 id="invitation-heading">Review with Fluently.</h1>
+    <p class="auth-intro">
+      You are signed in as {@account.email}. Accept this invitation to access the assigned project.
+    </p>
+    <div :if={@error} class="auth-error" role="alert" id="invitation-error">{@error}</div>
+    <.form
+      :if={!@error}
+      for={@form}
+      action={~p"/invitations/#{@token}"}
+      method="post"
+      id="invitation-form"
+    >
+      <button class="button button-primary" type="submit">Accept invitation
+      <span aria-hidden="true">↗</span></button>
+    </.form>
+    <p><a href={~p"/"}>Back to Fluently</a></p>
+  </main>
+</div>

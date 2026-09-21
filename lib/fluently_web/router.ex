@@ -44,6 +44,8 @@ defmodule FluentlyWeb.Router do
     post "/signup", AccountController, :register
     get "/login", AccountController, :login
     post "/login", AccountController, :authenticate
+    get "/invitations/:token", InvitationController, :show
+    post "/invitations/:token", InvitationController, :accept
     get "/app/login", ManageController, :login
     post "/app/login", ManageController, :authenticate
     post "/app/logout", ManageController, :logout
@@ -53,6 +55,7 @@ defmodule FluentlyWeb.Router do
     get "/app/projects/:id/edit", ManageController, :edit
     patch "/app/projects/:id", ManageController, :update
     post "/app/projects/:id/admins", ManageController, :grant_admin
+    post "/app/projects/:id/invitations", ManageController, :invite
     post "/app/projects/:id/admins/:admin_id/delete", ManageController, :revoke_admin
     post "/app/projects/:id/threads/:thread_id/replies", ManageController, :reply
     post "/app/projects/:id/threads/:thread_id/status", ManageController, :status

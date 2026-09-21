@@ -128,6 +128,15 @@ end
 # Toggle the first-party landing feedback widget and its cookie API.
 config :fluently, :demo_enabled, System.get_env("FLUENTLY_DEMO_ENABLED", "true") == "true"
 
+# Production collaboration is invite-only. Tests retain the legacy guest
+# surface while the removal migration is exercised and deployed.
+config :fluently,
+       :private_feedback_only,
+       if(config_env() == :test,
+         do: false,
+         else: System.get_env("FLUENTLY_PRIVATE_ONLY", "true") == "true"
+       )
+
 # First-party feedback goes to the owner's shared project. An absent project fails closed.
 if config_env() != :test do
   config :fluently,

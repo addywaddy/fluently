@@ -1,6 +1,6 @@
 defmodule FluentlyWeb.FeedbackAPIController do
   use FluentlyWeb, :controller
-  alias Fluently.{Feedback, Threads, RateLimit}
+  alias Fluently.{Accounts, Feedback, Threads, RateLimit}
   plug :project_boundary
   plug :authenticate when action not in [:options, :session, :account_session]
 
@@ -219,6 +219,9 @@ defmodule FluentlyWeb.FeedbackAPIController do
       not read_key and not match?({:ok, _}, result) ->
         conn |> error(401, "Valid review session or read API key required") |> halt()
 
+      Accounts.private_feedback_only?() and not read_key and guest_result?(result) ->
+        conn |> error(403, "Feedback is available to invited project members") |> halt()
+
       not RateLimit.allow?(
         {:api, conn.method == "GET", project.id, Feedback.hash(token)},
         if(conn.method == "GET", do: 180, else: 40)
@@ -241,6 +244,9 @@ defmodule FluentlyWeb.FeedbackAPIController do
       reference_metadata: is_nil(reviewer) or reviewer.account_member
     )
   end
+
+  defp guest_result?({:ok, %{account_member: false}}), do: true
+  defp guest_result?(_), do: false
 
   defp list_scope(conn, %{"view" => "mine"}) do
     if conn.assigns.reviewer, do: conn.assigns.reviewer.id, else: :none

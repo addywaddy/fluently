@@ -58,8 +58,15 @@ defmodule FluentlyWeb.ReviewConnectController do
 
       fields =
         case result do
-          {:ok, code} -> %{"fluently_code" => code, "fluently_state" => pending["state"]}
-          _ -> %{"fluently_result" => "guest", "fluently_state" => pending["state"]}
+          {:ok, code} ->
+            %{"fluently_code" => code, "fluently_state" => pending["state"]}
+
+          _ ->
+            %{
+              "fluently_result" =>
+                if(Accounts.private_feedback_only?(), do: "unauthorized", else: "guest"),
+              "fluently_state" => pending["state"]
+            }
         end
 
       uri = URI.parse(pending["return_to"])

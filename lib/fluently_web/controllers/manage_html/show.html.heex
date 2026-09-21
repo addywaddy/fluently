@@ -62,6 +62,21 @@
       <button class="button">Add admin</button>
     </.form>
     <.form
+      :if={@account}
+      for={@form}
+      action={~p"/app/projects/#{@project.id}/invitations"}
+      id="invite-reviewer"
+    >
+      <.input
+        field={@form[:email]}
+        type="email"
+        label="Invite a reviewer"
+        required
+        class="manage-input"
+      />
+      <button class="button">Send invitation</button>
+    </.form>
+    <.form
       :for={admin <- @admins}
       for={@form}
       action={~p"/app/projects/#{@project.id}/admins/#{admin.id}/delete"}

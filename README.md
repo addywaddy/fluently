@@ -177,31 +177,24 @@ silently enable that behavior.
 
 ## Dogfooding on Fluently
 
-The landing widget sends feedback to the **Fluently** project. Visitors see only threads
-that they started, including replies from the team. The owner and explicitly added project
-admins see all feedback, both on the landing page when signed in and in `/app/projects/:id`.
+The landing widget sends feedback to the **Fluently** project for signed-in Fluently users.
+Invited project members see the projects assigned to them; owners and admins see all feedback
+in their account. The inbox supports replies, resolve/reopen, snapshots, deletion and
+pagination.
 The inbox supports replies, resolve/reopen, snapshots, deletion and pagination. Owners can
 add or revoke admins by their existing registered account email; admins cannot manage
 credentials, grant access or delete the project.
 
-The first successful comment creates a project-scoped guest user and a random review
-session, remembered by a signed HttpOnly, SameSite cookie. It creates no account or workspace.
-Guest access expires after 14 days (or is lost if cookies are cleared), but submitted
-feedback stays in the owner's project. Signup creates an independent account and never
-claims earlier feedback. The current browser can retain its separate guest session after
-signup/login; signing in on another device does not recover guest feedback. Project members
-comment as their account; registered nonmembers comment as unlinked guests. Registered
-sessions last 30 days, with one active account session. Email verification and password
-recovery are not implemented yet.
+Invitations are tied to an intended email and selected projects. Acceptance creates the
+account and project memberships atomically; a link alone grants no access. Login sessions
+last 30 days and are bound to both the user and selected account. The legacy guest session
+tables remain only as a migration compatibility layer and are rejected in production by
+default. Email verification and password recovery are not implemented yet.
 
-`FLUENTLY_PROJECT_ID` selects the first-party project; it must also have `public_feedback`
-enabled in the database. The migration enables the existing local and production Fluently
-projects. A missing or unapproved project fails closed. On a fresh local database, create
-a project in `/app`, enable its `public_feedback` flag in IEx, and export its ID before
-starting Phoenix. `FLUENTLY_DEMO_ENABLED=false` disables the landing widget and API.
-Only the landing route includes the embed. Customer projects remain invite-only by default.
-Previously private demo projects stay private; their comments are never copied to the shared
-inbox. Registered users retain them in their workspace; unclaimed legacy demos still expire.
+`FLUENTLY_PROJECT_ID` selects the first-party project. A missing project fails closed.
+`FLUENTLY_PRIVATE_ONLY=true` (the production default) rejects guest review sessions and
+the public/demo cookie API. Set it to `false` only for a controlled compatibility window.
+`FLUENTLY_DEMO_ENABLED=false` disables the landing widget and API entirely.
 
 ## Anchors and privacy
 

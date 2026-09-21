@@ -264,6 +264,12 @@ atomically creates the account and project memberships; a link alone grants no
 access. Legacy project-admin rows are written only as a transition bridge for
 the current reviewer implementation.
 
+Production runs with `FLUENTLY_PRIVATE_ONLY=true` by default. Guest review
+sessions and the public/demo cookie API are rejected at their request
+boundaries; account review sessions remain available after normal membership
+authorization. Tests can temporarily set the flag false while the legacy
+tables and compatibility code are being removed in the next migration.
+
 The Feedstream default-scope approach is not being copied. Fluently will keep
 explicit Ecto account/project queries and enforce parent-tenant consistency on
 writes. Cross-domain `ReviewGrant` sessions remain the security boundary and

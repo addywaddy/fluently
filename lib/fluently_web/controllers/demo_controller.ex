@@ -180,6 +180,9 @@ defmodule FluentlyWeb.DemoController do
       not Accounts.demo_enabled?() or is_nil(project) ->
         conn |> error(404, "Feedback unavailable") |> halt()
 
+      Accounts.private_feedback_only?() and not member ->
+        conn |> error(403, "Feedback is available to invited project members") |> halt()
+
       get_req_header(conn, "origin") not in [[], [request_origin(conn)]] ->
         conn |> error(403, "Origin not allowed") |> halt()
 

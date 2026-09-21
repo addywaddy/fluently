@@ -1,7 +1,7 @@
 defmodule FluentlyWeb.ManageController do
   use FluentlyWeb, :controller
   import Phoenix.Component, only: [to_form: 1, to_form: 2]
-  alias Fluently.{Feedback, ProjectAccess, Threads}
+  alias Fluently.{Feedback, Invitations, ProjectAccess, Threads}
   plug :secure_page
   plug :require_owner when action not in [:login, :authenticate]
 
@@ -187,6 +187,23 @@ defmodule FluentlyWeb.ManageController do
     end
   end
 
+  def invite(conn, %{"id" => id, "email" => email}) do
+    account = conn.assigns[:account]
+
+    with %{user_id: user_id} <- account,
+         %{} = project <- ProjectAccess.project(conn.assigns.workspace, id),
+         {:ok, invitation, token} <- Invitations.issue(account, user_id, email, [project.id]),
+         {:ok, _} <-
+           Fluently.Mailer.deliver(Fluently.Accounts.InvitationMailer.invite(invitation, token)) do
+      redirect(conn,
+        to: ~p"/app/projects/#{id}",
+        flash: [info: "Invitation sent to #{invitation.email}."]
+      )
+    else
+      _ -> send_resp(conn, 422, "Owner or admin access and a valid email are required.")
+    end
+  end
+
   def revoke_admin(conn, %{"id" => id, "admin_id" => aid}) do
     case ProjectAccess.revoke(conn.assigns.workspace, id, aid) do
       :ok -> redirect(conn, to: ~p"/app/projects/#{id}")
@@ -212,6 +229,7 @@ defmodule FluentlyWeb.ManageController do
       threads: Fluently.Threads.list(p, conn.params),
       offset: Threads.offset(conn.params["offset"]),
       owner: p.workspace_id == conn.assigns.workspace.id,
+      account: Map.get(conn.assigns, :account),
       admins:
         if(p.workspace_id == conn.assigns.workspace.id, do: ProjectAccess.admins(p), else: []),
       form: to_form(%{})
@@ -228,7 +246,9 @@ defmodule FluentlyWeb.ManageController do
     account = Fluently.Accounts.current(get_session(conn, :account_token))
 
     if account && account.email do
-      assign(conn, :workspace, Feedback.workspace(account.workspace_id))
+      conn
+      |> assign(:account, account)
+      |> assign(:workspace, Feedback.workspace(account.workspace_id))
     else
       require_pilot_owner(conn)
     end
