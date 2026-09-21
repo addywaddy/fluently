@@ -3,17 +3,29 @@ defmodule Fluently.Accounts do
   import Ecto.Query
   import Ecto.Changeset
   alias Fluently.{Repo, Feedback}
-  alias Fluently.Accounts.{Account, AccountMembership}
+  alias Fluently.Accounts.{Account, AccountMembership, AccountSession}
   alias Fluently.Feedback.{Workspace, Thread}
 
   def current(token) when is_binary(token) do
     now = DateTime.utc_now()
 
-    Repo.one(
-      from a in Account,
-        where: a.session_hash == ^Feedback.hash(token) and a.session_expires_at > ^now,
-        where: is_nil(a.expires_at) or a.expires_at > ^now
-    )
+    account =
+      Repo.one(
+        from s in AccountSession,
+          join: a in Account,
+          on: a.id == s.account_id,
+          where: s.token_hash == ^Feedback.hash(token) and s.expires_at > ^now,
+          where: a.session_expires_at > ^now,
+          where: is_nil(a.expires_at) or a.expires_at > ^now,
+          select: a
+      ) ||
+        Repo.one(
+          from a in Account,
+            where: a.session_hash == ^Feedback.hash(token) and a.session_expires_at > ^now,
+            where: is_nil(a.expires_at) or a.expires_at > ^now
+        )
+
+    account
     |> ensure_user()
   end
 
@@ -76,6 +88,7 @@ defmodule Fluently.Accounts do
           |> unwrap!()
 
         ensure_owner_membership(account)
+        create_session(account, token)
 
         Repo.get!(Workspace, account.workspace_id)
         |> change(name: account.name <> "’s workspace")
@@ -107,6 +120,8 @@ defmodule Fluently.Accounts do
         )
         |> Repo.update()
 
+      create_session(account, token)
+
       {:ok, account, token}
     else
       {:error, :unauthorized}
@@ -118,7 +133,11 @@ defmodule Fluently.Accounts do
   def logout(nil), do: :ok
 
   def logout(account),
-    do: account |> change(session_hash: nil, session_expires_at: nil) |> Repo.update()
+    do:
+      Repo.transaction(fn ->
+        Repo.delete_all(from s in AccountSession, where: s.account_id == ^account.id)
+        account |> change(session_hash: nil, session_expires_at: nil) |> Repo.update!()
+      end)
 
   # Remove legacy private demos only; shared project feedback is independent.
   def prune_expired do
@@ -174,4 +193,14 @@ defmodule Fluently.Accounts do
   end
 
   defp ensure_owner_membership(_), do: :ok
+
+  defp create_session(%Account{user_id: user_id, id: account_id}, token)
+       when is_binary(user_id) and is_binary(token) do
+    Repo.insert!(%AccountSession{
+      account_id: account_id,
+      user_id: user_id,
+      token_hash: Feedback.hash(token),
+      expires_at: DateTime.add(DateTime.utc_now(), 30, :day)
+    })
+  end
 end

@@ -250,6 +250,13 @@ project administrators. The current credential-bearing `Accounts.Account`,
 the deployed application can migrate in stages. Later identity work will move
 credentials into `User` and remove the guest/demo compatibility paths.
 
+The second transition migration adds `account_sessions`, binding each hashed
+login token to both the registered User and selected Account. Login, logout and
+session lookup use this table; the old session columns are still dual-written
+until the account/user migration is complete. Review grants continue to bind to
+the legacy hash during this compatibility window and will move to the session
+record in the next identity step.
+
 The Feedstream default-scope approach is not being copied. Fluently will keep
 explicit Ecto account/project queries and enforce parent-tenant consistency on
 writes. Cross-domain `ReviewGrant` sessions remain the security boundary and
