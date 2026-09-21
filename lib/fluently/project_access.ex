@@ -13,25 +13,20 @@ defmodule Fluently.ProjectAccess do
   deliberately independent of the legacy ProjectAdmin row so removing access
   takes effect even while compatibility rows remain.
   """
-  def authorized?(%Account{user_id: user_id} = account, %Project{id: project_id})
+  def authorized?(%Account{user_id: user_id}, %Project{id: project_id})
       when is_binary(user_id) do
     Repo.exists?(
       from am in AccountMembership,
+        join: owning_account in Account,
+        on: owning_account.id == am.account_id,
         join: p in Project,
         on: p.id == ^project_id,
-        where: am.account_id == ^account.id and am.user_id == ^user_id,
+        where: am.user_id == ^user_id,
         where:
-          (am.role in ["owner", "admin"] and p.workspace_id == ^account.workspace_id) or
+          (am.role in ["owner", "admin"] and p.workspace_id == owning_account.workspace_id) or
             exists(
               from pm in ProjectMembership,
-                where: pm.project_id == ^project_id and pm.user_id == ^user_id,
-                where:
-                  exists(
-                    from pa in ProjectAdmin,
-                      where:
-                        pa.project_id == ^project_id and
-                          pa.workspace_id == ^account.workspace_id
-                  )
+                where: pm.project_id == ^project_id and pm.user_id == ^user_id
             )
     )
   end
@@ -86,6 +81,16 @@ defmodule Fluently.ProjectAccess do
         %ProjectMembership{project_id: p.id, user_id: account.user_id}
         |> Ecto.Changeset.change()
         |> Repo.insert(on_conflict: :nothing, conflict_target: [:project_id, :user_id])
+
+        if owning_account = Repo.get_by(Account, workspace_id: p.workspace_id) do
+          %Fluently.Accounts.AccountMembership{
+            account_id: owning_account.id,
+            user_id: account.user_id,
+            role: "member"
+          }
+          |> Ecto.Changeset.change()
+          |> Repo.insert(on_conflict: :nothing, conflict_target: [:account_id, :user_id])
+        end
 
         admin
       end)
