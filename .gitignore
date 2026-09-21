@@ -71,3 +71,4 @@ npm-debug.log
 /terraform/crash*.log
 
 /node_modules/
+/extension/dist/

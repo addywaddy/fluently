@@ -92,3 +92,8 @@ config :phoenix, :filter_parameters, [
 config :esbuild, :embed,
   args: ~w(embed/embed.js --bundle --target=es2022 --minify --outfile=../priv/static/embed.js),
   cd: Path.expand("../assets", __DIR__)
+
+config :esbuild, :extension,
+  args:
+    ~w(extension/content.js --bundle --target=chrome120 --minify --outfile=extension/dist/content.js),
+  cd: Path.expand("..", __DIR__)

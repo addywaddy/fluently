@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Fluently</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <h1>Fluently</h1>
+  <p id="status" role="status">Checking this page…</p>
+  <form id="start-form" hidden>
+    <label id="projects-label" hidden>Installed project<select id="projects"></select></label>
+    <details id="configuration">
+      <summary>Project configuration</summary>
+      <p>Use the service origin and project ID from your project's embed snippet. Access is checked when you sign in.</p>
+      <label>Fluently service<input id="service" type="url" value="https://fluently.now" required></label>
+      <label>Project ID<input id="project" required maxlength="36"></label>
+    </details>
+    <button id="start" type="submit">Start Fluently</button>
+  </form>
+  <p id="error" role="alert"></p>
+  <p class="note">Blue means Fluently is detected, not that you have project access.</p>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -51,14 +51,20 @@ jobs:
         run: mix test
       - name: Test embed SDK
         run: node --test test/embed/*.test.mjs
+      - name: Build and test Chrome extension
+        run: |
+          mix extension.build
+          node --test test/extension/*.test.mjs
       - name: Install browser test dependencies
         run: |
           npm ci --ignore-scripts
-          npx playwright install --with-deps webkit
+          npx playwright install --with-deps webkit chromium
       - name: Build embed and test in WebKit
         run: |
           mix assets.build
           npm run test:browser
+      - name: Test unpacked Chrome extension
+        run: node --test test/extension-browser/*.test.mjs
 
   build:
     name: Production Docker build
