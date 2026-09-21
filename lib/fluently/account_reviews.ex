@@ -1,9 +1,9 @@
 defmodule Fluently.AccountReviews do
   @moduledoc "Explicit project-member review sessions; independent of third-party cookies."
   import Ecto.Query
-  alias Fluently.{Repo, Feedback, ProjectAccess}
+  alias Fluently.{Repo, Feedback, ProjectAccess, Accounts}
   alias Fluently.Accounts.{Account, AccountSession, ReviewGrant}
-  alias Fluently.Feedback.{ProjectAdmin, ProjectUser}
+  alias Fluently.Feedback.{Actor, ProjectAdmin, ProjectUser}
 
   def valid_nonce?(value), do: is_binary(value) and Regex.match?(~r/\A[A-Za-z0-9_-]{43}\z/, value)
 
@@ -37,10 +37,17 @@ defmodule Fluently.AccountReviews do
                DateTime.compare(session.expires_at, DateTime.utc_now()) == :gt,
              do: Repo.rollback(:unauthorized)
 
-      {:ok, _} = ProjectAccess.reviewer(%{id: account.workspace_id}, project)
-
       membership =
-        Repo.get_by!(ProjectAdmin, project_id: project.id, workspace_id: account.workspace_id)
+        if Accounts.private_feedback_only?() do
+          Repo.get_by(ProjectAdmin, project_id: project.id, workspace_id: account.workspace_id) ||
+            Repo.insert!(%ProjectAdmin{
+              project_id: project.id,
+              workspace_id: account.workspace_id
+            })
+        else
+          {:ok, _} = ProjectAccess.reviewer(%{id: account.workspace_id}, project)
+          Repo.get_by!(ProjectAdmin, project_id: project.id, workspace_id: account.workspace_id)
+        end
 
       code = Feedback.secret()
 
@@ -48,7 +55,7 @@ defmodule Fluently.AccountReviews do
         project_id: project.id,
         account_id: account.id,
         account_session_id: session.id,
-        membership_id: membership.id,
+        membership_id: membership && membership.id,
         account_session_hash: account.session_hash,
         credential_version: project.credential_version,
         challenge: challenge,
@@ -121,12 +128,32 @@ defmodule Fluently.AccountReviews do
          true <- grant.credential_version == project.credential_version,
          %Account{} = account <- Repo.get(Account, grant.account_id),
          true <- live_session?(grant, account),
-         true <- member?(account, project),
-         %ProjectAdmin{} = member <- Repo.get(ProjectAdmin, grant.membership_id),
-         true <- member.project_id == project.id and member.workspace_id == account.workspace_id,
-         %ProjectUser{} = user <- Repo.get(ProjectUser, member.reviewer_id),
-         true <- user.project_id == project.id and user.user_id == account.user_id do
-      {:ok, %{user | account_member: true}}
+         true <- member?(account, project) do
+      if Accounts.private_feedback_only?() do
+        case Repo.get(Fluently.Accounts.User, account.user_id) do
+          %Fluently.Accounts.User{} = user ->
+            {:ok,
+             %Actor{
+               project_id: project.id,
+               user_id: user.id,
+               name: user.name || account.name || "Account user",
+               email: user.email || account.email
+             }}
+
+          _ ->
+            {:error, :unauthorized}
+        end
+      else
+        with %ProjectAdmin{} = member <- Repo.get(ProjectAdmin, grant.membership_id),
+             true <-
+               member.project_id == project.id and member.workspace_id == account.workspace_id,
+             %ProjectUser{} = user <- Repo.get(ProjectUser, member.reviewer_id),
+             true <- user.project_id == project.id and user.user_id == account.user_id do
+          {:ok, %{user | account_member: true}}
+        else
+          _ -> {:error, :unauthorized}
+        end
+      end
     else
       _ -> {:error, :unauthorized}
     end

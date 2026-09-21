@@ -2,7 +2,7 @@ defmodule Fluently.ProjectAccess do
   @moduledoc "Explicit project administration. Credentials and membership changes remain owner-only."
   import Ecto.Query
   alias Fluently.{Repo, Feedback}
-  alias Fluently.Feedback.{Project, ProjectAdmin, ProjectMembership, ProjectUser}
+  alias Fluently.Feedback.{Actor, Project, ProjectAdmin, ProjectMembership, ProjectUser}
   alias Fluently.Accounts.{Account, AccountMembership}
 
   @doc """
@@ -134,55 +134,82 @@ defmodule Fluently.ProjectAccess do
   end
 
   def existing_reviewer(workspace, project) do
-    if project(workspace, project.id) do
-      case Repo.get_by(ProjectAdmin, project_id: project.id, workspace_id: workspace.id) do
-        %{reviewer_id: id} when not is_nil(id) -> Repo.get(ProjectUser, id)
-        _ -> nil
+    if private_only?() do
+      registered_actor(workspace, project)
+    else
+      if project(workspace, project.id) do
+        case Repo.get_by(ProjectAdmin, project_id: project.id, workspace_id: workspace.id) do
+          %{reviewer_id: id} when not is_nil(id) -> Repo.get(ProjectUser, id)
+          _ -> nil
+        end
       end
     end
   end
 
   def reviewer(workspace, project) do
-    Repo.transaction(fn ->
-      if is_nil(project(workspace, project.id)), do: Repo.rollback(:not_found)
-      membership = Repo.get_by(ProjectAdmin, project_id: project.id, workspace_id: workspace.id)
+    if private_only?() do
+      with %Actor{} = actor <- registered_actor(workspace, project), do: {:ok, actor}
+    else
+      Repo.transaction(fn ->
+        if is_nil(project(workspace, project.id)), do: Repo.rollback(:not_found)
+        membership = Repo.get_by(ProjectAdmin, project_id: project.id, workspace_id: workspace.id)
 
-      if membership && membership.reviewer_id do
-        identity = Repo.get!(ProjectUser, membership.reviewer_id)
+        if membership && membership.reviewer_id do
+          identity = Repo.get!(ProjectUser, membership.reviewer_id)
 
-        account =
-          Repo.get_by(Account, workspace_id: workspace.id) |> Fluently.Accounts.ensure_user()
+          account =
+            Repo.get_by(Account, workspace_id: workspace.id) |> Fluently.Accounts.ensure_user()
 
-        if account && identity.user_id != account.user_id,
-          do:
-            identity
-            |> Ecto.Changeset.change(
-              user_id: account.user_id,
-              name: account.name,
-              kind: "account"
+          if account && identity.user_id != account.user_id,
+            do:
+              identity
+              |> Ecto.Changeset.change(
+                user_id: account.user_id,
+                name: account.name,
+                kind: "account"
+              )
+              |> Repo.update!(),
+            else: identity
+        else
+          account =
+            Repo.get_by(Account, workspace_id: workspace.id) |> Fluently.Accounts.ensure_user()
+
+          {:ok, reviewer} =
+            Feedback.create_project_user(
+              project,
+              %{
+                kind: if(account, do: "account", else: "admin"),
+                name: if(account, do: account.name, else: "Project owner")
+              },
+              if(account, do: account.user_id, else: nil)
             )
-            |> Repo.update!(),
-          else: identity
-      else
-        account =
-          Repo.get_by(Account, workspace_id: workspace.id) |> Fluently.Accounts.ensure_user()
 
-        {:ok, reviewer} =
-          Feedback.create_project_user(
-            project,
-            %{
-              kind: if(account, do: "account", else: "admin"),
-              name: if(account, do: account.name, else: "Project owner")
-            },
-            if(account, do: account.user_id, else: nil)
-          )
+          (membership || %ProjectAdmin{project_id: project.id, workspace_id: workspace.id})
+          |> Ecto.Changeset.change(reviewer_id: reviewer.id)
+          |> Repo.insert_or_update!()
 
-        (membership || %ProjectAdmin{project_id: project.id, workspace_id: workspace.id})
-        |> Ecto.Changeset.change(reviewer_id: reviewer.id)
-        |> Repo.insert_or_update!()
+          reviewer
+        end
+      end)
+    end
+  end
 
-        reviewer
-      end
-    end)
+  defp private_only?, do: Application.get_env(:fluently, :private_feedback_only, false)
+
+  defp registered_actor(workspace, project) do
+    with %Project{} = project <- Repo.get(Project, project.id),
+         %Account{user_id: user_id} = account when not is_nil(user_id) <-
+           Repo.get_by(Account, workspace_id: workspace.id),
+         %Fluently.Accounts.User{} = user <- Repo.get(Fluently.Accounts.User, user_id),
+         true <- authorized?(account, project) do
+      %Actor{
+        project_id: project.id,
+        user_id: user.id,
+        name: user.name || account.name || "Account user",
+        email: user.email || account.email
+      }
+    else
+      _ -> nil
+    end
   end
 end

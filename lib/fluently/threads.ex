@@ -3,7 +3,7 @@ defmodule Fluently.Threads do
   import Ecto.Query
   import Ecto.Changeset
   alias Fluently.Repo
-  alias Fluently.Feedback.{Thread, Message, Anchor, ProjectUser}
+  alias Fluently.Feedback.{Actor, Thread, Message, Anchor, ProjectUser}
 
   # :all is an internal capability, never accepted from request parameters.
   def visible?(project, id, scope) do
@@ -60,6 +60,16 @@ defmodule Fluently.Threads do
   end
 
   def create(project, %ProjectUser{project_id: pid} = reviewer, attrs) when pid == project.id do
+    create_as(project, reviewer, reviewer.id, attrs)
+  end
+
+  def create(project, %Actor{project_id: pid} = actor, attrs) when pid == project.id do
+    create_as(project, actor, nil, attrs)
+  end
+
+  def create(_, _, _), do: {:error, :unauthorized}
+
+  defp create_as(project, actor, reviewer_id, attrs) do
     with {:ok, anchor} <- Anchor.normalize(attrs["anchor"]),
          {:ok, context} <- Anchor.context(attrs["context"]),
          {:ok, page} <- page(project, attrs["page"]) do
@@ -67,15 +77,15 @@ defmodule Fluently.Threads do
         thread =
           %Thread{
             project_id: project.id,
-            reviewer_id: reviewer.id,
-            author_user_id: reviewer.user_id,
+            reviewer_id: reviewer_id,
+            author_user_id: actor.user_id,
             page: page,
             anchor: anchor,
             context: context
           }
           |> Repo.insert!()
 
-        case add_message(thread, reviewer, attrs["body"]) do
+        case add_message(thread, actor, reviewer_id, attrs["body"]) do
           {:ok, _} -> preload(thread)
           {:error, error} -> Repo.rollback(error)
         end
@@ -83,21 +93,24 @@ defmodule Fluently.Threads do
     end
   end
 
-  def create(_, _, _), do: {:error, :unauthorized}
+  def reply(project, reviewer, id, body)
+      when is_struct(reviewer, ProjectUser) or is_struct(reviewer, Actor) do
+    if reviewer.project_id == project.id do
+      Repo.transaction(fn ->
+        thread = transaction_thread(project, id) || Repo.rollback(:not_found)
 
-  def reply(project, %ProjectUser{project_id: pid} = reviewer, id, body) when pid == project.id do
-    Repo.transaction(fn ->
-      thread = transaction_thread(project, id) || Repo.rollback(:not_found)
+        case add_message(thread, reviewer, legacy_reviewer_id(reviewer), body) do
+          {:ok, message} ->
+            thread |> change(updated_at: DateTime.utc_now()) |> Repo.update!()
+            message
 
-      case add_message(thread, reviewer, body) do
-        {:ok, message} ->
-          thread |> change(updated_at: DateTime.utc_now()) |> Repo.update!()
-          message
-
-        {:error, error} ->
-          Repo.rollback(error)
-      end
-    end)
+          {:error, error} ->
+            Repo.rollback(error)
+        end
+      end)
+    else
+      {:error, :unauthorized}
+    end
   end
 
   def reply(_, _, _, _), do: {:error, :unauthorized}
@@ -118,25 +131,29 @@ defmodule Fluently.Threads do
     end
   end
 
-  def delete_message(project, %ProjectUser{project_id: pid} = reviewer, thread_id, message_id)
-      when pid == project.id do
-    Repo.transaction(fn ->
-      with %Thread{} = thread <- transaction_thread(project, thread_id),
-           thread = preload(thread),
-           %Message{} = message <- Enum.find(thread.messages, &(&1.id == message_id)),
-           true <- message.reviewer_id == reviewer.id do
-        if hd(thread.messages).id == message.id do
-          Repo.delete!(thread)
-          %{deleted_thread: true, thread: nil}
+  def delete_message(project, reviewer, thread_id, message_id)
+      when is_struct(reviewer, ProjectUser) or is_struct(reviewer, Actor) do
+    if reviewer.project_id == project.id do
+      Repo.transaction(fn ->
+        with %Thread{} = thread <- transaction_thread(project, thread_id),
+             thread = preload(thread),
+             %Message{} = message <- Enum.find(thread.messages, &(&1.id == message_id)),
+             true <- message_matches?(message, reviewer) do
+          if hd(thread.messages).id == message.id do
+            Repo.delete!(thread)
+            %{deleted_thread: true, thread: nil}
+          else
+            Repo.delete!(message)
+            thread = thread |> change(updated_at: DateTime.utc_now()) |> Repo.update!()
+            %{deleted_thread: false, thread: get(project, thread.id)}
+          end
         else
-          Repo.delete!(message)
-          thread = thread |> change(updated_at: DateTime.utc_now()) |> Repo.update!()
-          %{deleted_thread: false, thread: get(project, thread.id)}
+          _ -> Repo.rollback(:not_found)
         end
-      else
-        _ -> Repo.rollback(:not_found)
-      end
-    end)
+      end)
+    else
+      {:error, :unauthorized}
+    end
   end
 
   def delete_message(_, _, _, _), do: {:error, :unauthorized}
@@ -168,10 +185,7 @@ defmodule Fluently.Threads do
           %{
             id: m.id,
             body: m.body,
-            can_delete:
-              (not is_nil(reviewer) and reviewer.project_id == thread.project_id and
-                 reviewer.id == m.reviewer_id) or
-                (not is_nil(reviewer.user_id) and reviewer.user_id == m.author_user_id),
+            can_delete: can_delete?(reviewer, thread, m),
             created_at: m.inserted_at,
             author:
               if (Keyword.get(opts, :reference_metadata, false) and m.reviewer) &&
@@ -222,8 +236,8 @@ defmodule Fluently.Threads do
     end
   end
 
-  defp add_message(thread, reviewer, body) do
-    %Message{thread_id: thread.id, reviewer_id: reviewer.id, author_user_id: reviewer.user_id}
+  defp add_message(thread, actor, reviewer_id, body) do
+    %Message{thread_id: thread.id, reviewer_id: reviewer_id, author_user_id: actor.user_id}
     |> cast(%{body: body}, [:body])
     |> validate_required([:body])
     |> validate_length(:body, max: 4000)
@@ -232,19 +246,31 @@ defmodule Fluently.Threads do
 
   defp preload(nil), do: nil
 
-  defp preload(value),
-    do:
-      Repo.preload(value,
-        snapshot:
-          from(s in Fluently.Feedback.Snapshot,
-            select: [:thread_id, :width, :height, :inserted_at]
-          ),
-        messages:
+  defp preload(value) do
+    message_preload =
+      if Application.get_env(:fluently, :private_feedback_only, false),
+        do: {from(m in Message, order_by: [asc: m.inserted_at, asc: m.id]), [:author]},
+        else:
           {from(m in Message, order_by: [asc: m.inserted_at, asc: m.id]), [:reviewer, :author]}
-      )
+
+    Repo.preload(value,
+      snapshot:
+        from(s in Fluently.Feedback.Snapshot, select: [:thread_id, :width, :height, :inserted_at]),
+      messages: message_preload
+    )
+  end
 
   defp visible_to?(_thread, :all), do: true
   defp visible_to?(_thread, :none), do: false
   defp visible_to?(thread, {:user, user_id}), do: thread.author_user_id == user_id
   defp visible_to?(thread, reviewer_id), do: thread.reviewer_id == reviewer_id
+
+  defp legacy_reviewer_id(%ProjectUser{id: id}), do: id
+  defp legacy_reviewer_id(%Actor{}), do: nil
+  defp message_matches?(message, %ProjectUser{id: id}), do: message.reviewer_id == id
+  defp message_matches?(message, %Actor{user_id: id}), do: message.author_user_id == id
+  defp can_delete?(nil, _thread, _message), do: false
+
+  defp can_delete?(actor, thread, message),
+    do: actor.project_id == thread.project_id and actor.user_id == message.author_user_id
 end

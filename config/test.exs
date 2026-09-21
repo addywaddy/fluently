@@ -39,3 +39,7 @@ config :phoenix,
   sort_verified_routes_query_params: true
 
 config :sentry, test_mode: true
+
+# Legacy guest fixtures remain available to unit tests while production uses
+# the private registered-user collaboration path.
+config :fluently, :private_feedback_only, false

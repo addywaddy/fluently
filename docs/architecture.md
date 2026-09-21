@@ -282,6 +282,15 @@ feedback, registered users and project configuration are retained. The legacy
 tables remain for one compatibility release but production request boundaries
 reject new guest writes.
 
+The private runtime cutover resolves review actors from registered `User`
+records and account/project memberships through `Fluently.Feedback.Actor`.
+New private threads and messages store direct `author_user_id` values. Migration
+`20260921205321` removes the guest session table on private deployments. SQLite
+cannot rewrite the original non-null reviewer columns during a rolling
+migration, so those columns and the unused `project_admins` compatibility table
+remain inert until a planned fresh production rebuild; no private request
+depends on them.
+
 The Feedstream default-scope approach is not being copied. Fluently will keep
 explicit Ecto account/project queries and enforce parent-tenant consistency on
 writes. Cross-domain `ReviewGrant` sessions remain the security boundary and

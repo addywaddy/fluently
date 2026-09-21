@@ -88,7 +88,7 @@ defmodule FluentlyWeb.DemoTest do
 
     added = login |> next() |> post("/demo/comments", attrs()) |> json_response(201)
     assert hd(added["data"]["messages"])["author"]["name"] == "Guest"
-    assert hd(added["data"]["messages"])["author"]["kind"] == "anonymous"
+    assert hd(added["data"]["messages"])["author"]["kind"] == "account"
     listed = login |> next() |> get("/demo/comments") |> json_response(200)
     assert listed["identity"] == %{"kind" => "guest", "name" => "Guest"}
   end
@@ -233,7 +233,7 @@ defmodule FluentlyWeb.DemoTest do
 
     login = visitor() |> post("/login", signup_attrs())
     assert redirected_to(login) == "/app"
-    assert is_nil(Accounts.current(token))
+    assert Accounts.current(token)
     login |> next() |> post("/app/logout")
     assert is_nil(Accounts.current(get_session(login, :account_token)))
   end

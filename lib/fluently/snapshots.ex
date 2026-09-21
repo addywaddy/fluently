@@ -2,16 +2,26 @@ defmodule Fluently.Snapshots do
   @moduledoc "Small, immutable PNG attachments. Access always goes through the project boundary."
   import Ecto.Query
   alias Fluently.{Repo, Threads}
-  alias Fluently.Feedback.{ProjectUser, Snapshot}
+  alias Fluently.Feedback.{Actor, ProjectUser, Snapshot}
 
   @max_bytes 204_800
   def attach(project, %ProjectUser{project_id: pid} = reviewer, id, data)
       when pid == project.id do
+    attach_for(project, reviewer, id, data)
+  end
+
+  def attach(project, %Actor{project_id: pid} = actor, id, data) when pid == project.id do
+    attach_for(project, actor, id, data)
+  end
+
+  def attach(_, _, _, _), do: {:error, :not_found}
+
+  defp attach_for(project, reviewer, id, data) do
     Repo.transaction(fn ->
       thread = Threads.get(project, id) || Repo.rollback(:not_found)
 
-      if thread.reviewer_id != reviewer.id and
-           (is_nil(reviewer.user_id) or thread.author_user_id != reviewer.user_id),
+      if (legacy_reviewer_id(reviewer) && thread.reviewer_id != legacy_reviewer_id(reviewer)) and
+           thread.author_user_id != reviewer.user_id,
          do: Repo.rollback(:not_found)
 
       {image, width, height} =
@@ -31,7 +41,8 @@ defmodule Fluently.Snapshots do
     end)
   end
 
-  def attach(_, _, _, _), do: {:error, :not_found}
+  defp legacy_reviewer_id(%ProjectUser{id: id}), do: id
+  defp legacy_reviewer_id(%Actor{}), do: nil
 
   def get(project, id) do
     with {:ok, id} <- Ecto.UUID.cast(id) do
