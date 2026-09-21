@@ -257,6 +257,13 @@ until the account/user migration is complete. Review grants continue to bind to
 the legacy hash during this compatibility window and will move to the session
 record in the next identity step.
 
+Invitations are likewise stored as hashed, seven-day, single-use records. An
+invitation names the owning account, intended email, member role and an explicit
+list of project IDs. Acceptance verifies the authenticated user's email and
+atomically creates the account and project memberships; a link alone grants no
+access. Legacy project-admin rows are written only as a transition bridge for
+the current reviewer implementation.
+
 The Feedstream default-scope approach is not being copied. Fluently will keep
 explicit Ecto account/project queries and enforce parent-tenant consistency on
 writes. Cross-domain `ReviewGrant` sessions remain the security boundary and
