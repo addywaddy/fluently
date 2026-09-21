@@ -249,10 +249,7 @@ defmodule Fluently.Threads do
 
   defp preload(value) do
     message_preload =
-      if Application.get_env(:fluently, :private_feedback_only, false),
-        do: {from(m in Message, order_by: [asc: m.inserted_at, asc: m.id]), [:author]},
-        else:
-          {from(m in Message, order_by: [asc: m.inserted_at, asc: m.id]), [:reviewer, :author]}
+      {from(m in Message, order_by: [asc: m.inserted_at, asc: m.id]), [:reviewer, :author]}
 
     Repo.preload(value,
       snapshot:

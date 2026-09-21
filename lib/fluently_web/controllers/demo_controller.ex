@@ -179,7 +179,11 @@ defmodule FluentlyWeb.DemoController do
         not is_nil(ProjectAccess.project(workspace, project.id))
 
     token = get_session(conn, :guest_review_token) || get_session(conn, :account_token)
-    guest = GuestReviews.current(project, token)
+
+    guest =
+      if Accounts.private_feedback_only?() or is_nil(project),
+        do: nil,
+        else: GuestReviews.current(project, token)
 
     cond do
       not Accounts.demo_enabled?() or is_nil(project) ->
