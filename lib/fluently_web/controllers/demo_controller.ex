@@ -124,12 +124,17 @@ defmodule FluentlyWeb.DemoController do
 
   defp identities(conn), do: Enum.reject([conn.assigns.guest, conn.assigns.identity], &is_nil/1)
 
-  defp list_scope(conn, %{"view" => "mine"}),
-    do: if(conn.assigns.identity, do: conn.assigns.identity.id, else: :none)
+  defp list_scope(conn, %{"view" => "mine"}) do
+    case conn.assigns.identity do
+      %{account_member: true, user_id: user_id} -> {:user, user_id}
+      %{id: id} -> id
+      _ -> :none
+    end
+  end
 
   defp list_scope(conn, _), do: scope(conn)
 
-  defp scope(%{assigns: %{member: true}}), do: :all
+  defp scope(%{assigns: %{member: true, identity: %{user_id: user_id}}}), do: {:user, user_id}
   defp scope(%{assigns: %{guest: %{id: id}}}), do: id
   defp scope(_), do: :none
 

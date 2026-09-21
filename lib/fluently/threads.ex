@@ -9,7 +9,7 @@ defmodule Fluently.Threads do
   def visible?(project, id, scope) do
     case get(project, id) do
       nil -> false
-      thread -> scope == :all or thread.reviewer_id == scope
+      thread -> visible_to?(thread, scope)
     end
   end
 
@@ -31,6 +31,7 @@ defmodule Fluently.Threads do
       case scope do
         :all -> query
         :none -> where(query, [t], false)
+        {:user, user_id} -> where(query, [t], t.author_user_id == ^user_id)
         id -> where(query, [t], t.reviewer_id == ^id)
       end
 
@@ -165,8 +166,9 @@ defmodule Fluently.Threads do
             id: m.id,
             body: m.body,
             can_delete:
-              not is_nil(reviewer) and reviewer.project_id == thread.project_id and
-                reviewer.id == m.reviewer_id,
+              (not is_nil(reviewer) and reviewer.project_id == thread.project_id and
+                 reviewer.id == m.reviewer_id) or
+                (not is_nil(reviewer.user_id) and reviewer.user_id == m.author_user_id),
             created_at: m.inserted_at,
             author:
               if Keyword.get(opts, :reference_metadata, false) and m.reviewer.external_id do
@@ -227,6 +229,12 @@ defmodule Fluently.Threads do
           from(s in Fluently.Feedback.Snapshot,
             select: [:thread_id, :width, :height, :inserted_at]
           ),
-        messages: {from(m in Message, order_by: [asc: m.inserted_at, asc: m.id]), [:reviewer]}
+        messages:
+          {from(m in Message, order_by: [asc: m.inserted_at, asc: m.id]), [:reviewer, :author]}
       )
+
+  defp visible_to?(_thread, :all), do: true
+  defp visible_to?(_thread, :none), do: false
+  defp visible_to?(thread, {:user, user_id}), do: thread.author_user_id == user_id
+  defp visible_to?(thread, reviewer_id), do: thread.reviewer_id == reviewer_id
 end

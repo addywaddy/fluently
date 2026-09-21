@@ -249,16 +249,26 @@ defmodule FluentlyWeb.FeedbackAPIController do
   defp guest_result?(_), do: false
 
   defp list_scope(conn, %{"view" => "mine"}) do
-    if conn.assigns.reviewer, do: conn.assigns.reviewer.id, else: :none
+    case conn.assigns.reviewer do
+      %{account_member: true, user_id: user_id} -> {:user, user_id}
+      %{id: id} -> id
+      _ -> :none
+    end
   end
 
   defp list_scope(conn, _), do: scope(conn)
 
   defp scope(conn) do
-    if conn.assigns.project.public_feedback && conn.assigns.reviewer &&
-         not conn.assigns.reviewer.account_member,
-       do: conn.assigns.reviewer.id,
-       else: :all
+    cond do
+      conn.assigns.reviewer && conn.assigns.reviewer.account_member ->
+        {:user, conn.assigns.reviewer.user_id}
+
+      conn.assigns.project.public_feedback && conn.assigns.reviewer ->
+        conn.assigns.reviewer.id
+
+      true ->
+        :all
+    end
   end
 
   defp thread_boundary(conn, _) do

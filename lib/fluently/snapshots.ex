@@ -9,7 +9,10 @@ defmodule Fluently.Snapshots do
       when pid == project.id do
     Repo.transaction(fn ->
       thread = Threads.get(project, id) || Repo.rollback(:not_found)
-      if thread.reviewer_id != reviewer.id, do: Repo.rollback(:not_found)
+
+      if thread.reviewer_id != reviewer.id and
+           (is_nil(reviewer.user_id) or thread.author_user_id != reviewer.user_id),
+         do: Repo.rollback(:not_found)
 
       {image, width, height} =
         case decode(data) do
