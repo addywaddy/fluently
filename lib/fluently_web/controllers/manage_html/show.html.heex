@@ -96,7 +96,7 @@
     <strong>{thread.status}</strong>
     · {thread.page}
     <p :for={message <- thread.messages}>
-      <strong>{message.reviewer.name}:</strong> {message.body}
+      <strong>{(message.reviewer || message.author).name}:</strong> {message.body}
     </p>
     <img
       :if={thread.snapshot}

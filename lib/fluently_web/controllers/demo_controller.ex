@@ -134,7 +134,7 @@ defmodule FluentlyWeb.DemoController do
 
   defp list_scope(conn, _), do: scope(conn)
 
-  defp scope(%{assigns: %{member: true, identity: %{user_id: user_id}}}), do: {:user, user_id}
+  defp scope(%{assigns: %{member: true}}), do: :all
   defp scope(%{assigns: %{guest: %{id: id}}}), do: id
   defp scope(_), do: :none
 

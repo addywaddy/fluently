@@ -261,7 +261,7 @@ defmodule FluentlyWeb.FeedbackAPIController do
   defp scope(conn) do
     cond do
       conn.assigns.reviewer && conn.assigns.reviewer.account_member ->
-        {:user, conn.assigns.reviewer.user_id}
+        :all
 
       conn.assigns.project.public_feedback && conn.assigns.reviewer ->
         conn.assigns.reviewer.id

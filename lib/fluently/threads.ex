@@ -162,6 +162,9 @@ defmodule Fluently.Threads do
       updated_at: thread.updated_at,
       messages:
         Enum.map(thread.messages, fn m ->
+          author_name = (m.author && m.author.name) || (m.reviewer && m.reviewer.name)
+          author_kind = if m.author, do: "account", else: m.reviewer && m.reviewer.kind
+
           %{
             id: m.id,
             body: m.body,
@@ -171,11 +174,13 @@ defmodule Fluently.Threads do
                 (not is_nil(reviewer.user_id) and reviewer.user_id == m.author_user_id),
             created_at: m.inserted_at,
             author:
-              if Keyword.get(opts, :reference_metadata, false) and m.reviewer.external_id do
+              if (Keyword.get(opts, :reference_metadata, false) and m.reviewer) &&
+                   m.reviewer.external_id do
                 %{
                   id: m.reviewer.id,
-                  name: m.reviewer.name,
-                  kind: m.reviewer.kind,
+                  user_id: m.author_user_id,
+                  name: author_name,
+                  kind: author_kind,
                   external_ref: %{
                     value: m.reviewer.external_id,
                     verified: false,
@@ -183,7 +188,12 @@ defmodule Fluently.Threads do
                   }
                 }
               else
-                %{id: m.reviewer.id, name: m.reviewer.name, kind: m.reviewer.kind}
+                %{
+                  id: m.reviewer && m.reviewer.id,
+                  user_id: m.author_user_id,
+                  name: author_name,
+                  kind: author_kind
+                }
               end
           }
         end)
