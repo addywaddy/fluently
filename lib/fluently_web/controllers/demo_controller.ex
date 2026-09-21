@@ -99,8 +99,7 @@ defmodule FluentlyWeb.DemoController do
     thread = Threads.get(conn.assigns.project, id)
 
     with message when not is_nil(message) <- Enum.find(thread.messages, &(&1.id == mid)),
-         author when not is_nil(author) <-
-           Enum.find(identities(conn), &(&1.id == message.reviewer_id)),
+         author when not is_nil(author) <- author_for_message(conn, message),
          {:ok, result} <- Threads.delete_message(conn.assigns.project, author, id, mid) do
       json(conn, %{
         deleted_thread: result.deleted_thread,
@@ -112,17 +111,27 @@ defmodule FluentlyWeb.DemoController do
   end
 
   defp serialize(conn, thread, extra \\ nil) do
-    ids = Enum.map(Enum.reject([extra | identities(conn)], &is_nil/1), & &1.id)
+    ids = Enum.map(Enum.reject([extra | identities(conn)], &is_nil/1), &identity_key/1)
 
     thread
     |> Threads.serialize()
     |> Map.put(:page, request_origin(conn) <> "/")
     |> Map.update!(:messages, fn messages ->
-      Enum.map(messages, &Map.put(&1, :can_delete, &1.author.id in ids))
+      Enum.map(messages, &Map.put(&1, :can_delete, identity_key(&1.author) in ids))
     end)
   end
 
   defp identities(conn), do: Enum.reject([conn.assigns.guest, conn.assigns.identity], &is_nil/1)
+
+  defp identity_key(%{user_id: user_id}) when is_binary(user_id), do: user_id
+  defp identity_key(%{id: id}), do: id
+  defp identity_key(_), do: nil
+
+  defp author_for_message(conn, message) do
+    Enum.find(identities(conn), fn identity ->
+      identity_key(identity) in [message.reviewer_id, message.author_user_id]
+    end)
+  end
 
   defp list_scope(conn, %{"view" => "mine"}) do
     case conn.assigns.identity do

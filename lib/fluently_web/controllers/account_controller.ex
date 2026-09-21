@@ -49,7 +49,11 @@ defmodule FluentlyWeb.AccountController do
     guest_token = get_session(conn, :guest_review_token) || get_session(conn, :account_token)
 
     guest_token =
-      if Fluently.GuestReviews.current(Accounts.public_project(), guest_token), do: guest_token
+      if Fluently.Accounts.private_feedback_only?() do
+        nil
+      else
+        if Fluently.GuestReviews.current(Accounts.public_project(), guest_token), do: guest_token
+      end
 
     conn
     |> configure_session(renew: true)
