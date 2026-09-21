@@ -270,6 +270,12 @@ boundaries; account review sessions remain available after normal membership
 authorization. Tests can temporarily set the flag false while the legacy
 tables and compatibility code are being removed in the next migration.
 
+The author migration adds profile fields to `User` and direct `author_user_id`
+columns to threads and messages. Registered authors are backfilled, and new
+account-authored feedback dual-writes the direct user fields. The legacy
+reviewer columns remain readable until guest data is purged and serializers and
+ownership checks have moved fully to User.
+
 The Feedstream default-scope approach is not being copied. Fluently will keep
 explicit Ecto account/project queries and enforce parent-tenant consistency on
 writes. Cross-domain `ReviewGrant` sessions remain the security boundary and

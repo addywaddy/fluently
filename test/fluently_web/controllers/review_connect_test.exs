@@ -94,6 +94,9 @@ defmodule FluentlyWeb.ReviewConnectTest do
     author = hd(created["data"]["messages"])["author"]
     assert author["name"] == "Owner"
     assert Repo.get!(Fluently.Feedback.ProjectUser, author["id"]).user_id == c.account.user_id
+    thread = Repo.get!(Fluently.Feedback.Thread, created["data"]["id"]) |> Repo.preload(:messages)
+    assert thread.author_user_id == c.account.user_id
+    assert hd(thread.messages).author_user_id == c.account.user_id
 
     list =
       api(c.project, exchanged["token"])

@@ -35,7 +35,13 @@ defmodule Fluently.Accounts do
   def ensure_user(%Account{email: email, user_id: nil} = account) when not is_nil(email) do
     {:ok, account} =
       Repo.transaction(fn ->
-        Repo.insert!(%Fluently.Accounts.User{id: account.id, kind: "registered"},
+        Repo.insert!(
+          %Fluently.Accounts.User{
+            id: account.id,
+            kind: "registered",
+            name: account.name,
+            email: account.email
+          },
           on_conflict: :nothing
         )
 
@@ -73,7 +79,13 @@ defmodule Fluently.Accounts do
         {:ok, workspace, _} =
           Feedback.create_workspace(get_change(changeset, :name) <> "’s workspace")
 
-        user = Repo.insert!(%Fluently.Accounts.User{kind: "registered"})
+        user =
+          Repo.insert!(%Fluently.Accounts.User{
+            kind: "registered",
+            name: get_change(changeset, :name),
+            email: get_change(changeset, :email)
+          })
+
         account = %Account{workspace_id: workspace.id, user_id: user.id}
         token = Feedback.secret()
 

@@ -67,6 +67,7 @@ defmodule Fluently.Threads do
           %Thread{
             project_id: project.id,
             reviewer_id: reviewer.id,
+            author_user_id: reviewer.user_id,
             page: page,
             anchor: anchor,
             context: context
@@ -210,7 +211,7 @@ defmodule Fluently.Threads do
   end
 
   defp add_message(thread, reviewer, body) do
-    %Message{thread_id: thread.id, reviewer_id: reviewer.id}
+    %Message{thread_id: thread.id, reviewer_id: reviewer.id, author_user_id: reviewer.user_id}
     |> cast(%{body: body}, [:body])
     |> validate_required([:body])
     |> validate_length(:body, max: 4000)
